@@ -30,7 +30,7 @@ type WebhookPayload struct {
 	QuotedMessageId string `json:"quotedMessageId,omitempty"`
 	QuotedSender    string `json:"quotedSender,omitempty"`
 	QuotedContent   string `json:"quotedContent,omitempty"`
-	// Media fields - populated when the message contains an image attachment
+	// Media fields - populated when the message contains an image or document attachment
 	MessageID     string `json:"messageId,omitempty"`
 	MediaType     string `json:"mediaType,omitempty"`
 	MimeType      string `json:"mimeType,omitempty"`
@@ -83,8 +83,9 @@ func SendWebhook(sender, content, chatJID string, isFromMe bool, quotedMessageId
 }
 
 // SendWebhookWithMedia sends a message to the webhook endpoint including base64-encoded
-// image data read from localPath. If localPath is empty or unreadable the webhook is
-// still sent – just without the MediaBase64 field so the text caption is not lost.
+// media data (image or document) read from localPath. If localPath is empty or unreadable
+// the webhook is still sent – just without the MediaBase64 field so the text caption and
+// media metadata (type, filename) are not lost.
 func SendWebhookWithMedia(
 	sender, content, chatJID string,
 	isFromMe bool,

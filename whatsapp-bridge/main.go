@@ -1541,38 +1541,40 @@ func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *ev
 		logger.Warnf("Failed to store message: %v", err)
 	}
 
-	// For image messages, download media synchronously so we can include the base64
-	// payload in the webhook. Other media types (video, audio, document) are still
-	// downloaded asynchronously since they are not passed to the AI vision pipeline.
-	var imageDownloadPath string
-	var imageMimeType string
-	if mediaType == "image" && url != "" && len(mediaKey) > 0 {
-		logger.Infof("Downloading image media for message %s (synchronous)", msg.Info.ID)
+	// For image and document messages, download media synchronously so we can include the
+	// base64 payload in the webhook. The AI pipeline reads images with vision and documents
+	// (e.g. PDF team sheets, often with a thin or empty caption) with the Read tool. Other
+	// media types (video, audio) are still downloaded asynchronously for caching only.
+	inlineMedia := mediaType == "image" || mediaType == "document"
+	var inlineDownloadPath string
+	var inlineMimeType string
+	if inlineMedia && url != "" && len(mediaKey) > 0 {
+		logger.Infof("Downloading %s media for message %s (synchronous)", mediaType, msg.Info.ID)
 		success, _, _, dlPath, dlErr := downloadMedia(client, messageStore, msg.Info.ID, chatJID)
 		if success && dlErr == nil {
-			imageDownloadPath = dlPath
+			inlineDownloadPath = dlPath
 			// Detect MIME type by sniffing the actual file bytes rather than
-			// trusting the generated filename extension (always .jpg).
+			// trusting the generated filename extension.
 			if f, openErr := os.Open(dlPath); openErr == nil {
 				buf := make([]byte, 512)
 				if n, readErr := f.Read(buf); readErr == nil || n > 0 {
-					imageMimeType = http.DetectContentType(buf[:n])
+					inlineMimeType = http.DetectContentType(buf[:n])
 				}
 				_ = f.Close()
 			}
-			if imageMimeType == "" {
-				imageMimeType = "application/octet-stream"
+			if inlineMimeType == "" {
+				inlineMimeType = "application/octet-stream"
 			}
-			logger.Infof("✅ Image downloaded: %s (%s)", dlPath, imageMimeType)
+			logger.Infof("✅ %s downloaded: %s (%s)", mediaType, dlPath, inlineMimeType)
 		} else {
-			logger.Warnf("❌ Image download failed: %v", dlErr)
+			logger.Warnf("❌ %s download failed: %v", mediaType, dlErr)
 			// Fall back to async download so media is cached for future MCP tool calls
 			go func() {
 				_, _, _, _, _ = downloadMedia(client, messageStore, msg.Info.ID, chatJID)
 			}()
 		}
-	} else if mediaType != "" && mediaType != "image" && url != "" && len(mediaKey) > 0 {
-		// Non-image media: async download for caching only (not sent to vision pipeline)
+	} else if mediaType != "" && !inlineMedia && url != "" && len(mediaKey) > 0 {
+		// Video/audio: async download for caching only (not sent to the AI pipeline)
 		logger.Infof("Auto-downloading %s media for message %s", mediaType, msg.Info.ID)
 		go func() {
 			success, _, _, downloadPath, err := downloadMedia(client, messageStore, msg.Info.ID, chatJID)
@@ -1586,18 +1588,17 @@ func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *ev
 
 	// Send webhook for incoming messages.
 	// Forward self-messages when FORWARD_SELF=true.
-	// Always forward image messages (even without a text caption) so the AI vision
-	// pipeline can analyse the image content.
+	// Always forward image and document messages (even without a text caption) so the AI
+	// pipeline can analyse the attachment content (team sheets often have a thin caption).
 	shouldForward := forwardSelfMessages || !msg.Info.IsFromMe
 	hasText := content != ""
-	hasImage := mediaType == "image"
 
-	if shouldForward && (hasText || hasImage) {
-		if hasImage {
+	if shouldForward && (hasText || inlineMedia) {
+		if inlineMedia {
 			SendWebhookWithMedia(
 				sender, content, chatJID, msg.Info.IsFromMe,
 				quotedMessageId, quotedSender, quotedContent,
-				msg.Info.ID, mediaType, imageMimeType, filename, imageDownloadPath,
+				msg.Info.ID, mediaType, inlineMimeType, filename, inlineDownloadPath,
 			)
 		} else {
 			SendWebhook(sender, content, chatJID, msg.Info.IsFromMe, quotedMessageId, quotedSender, quotedContent)

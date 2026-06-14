@@ -26,6 +26,14 @@ whatsapp-bridge/whatsapp-client
 # WhatsApp data (personal/sensitive)
 whatsapp-bridge/store/
 
+# Secrets / tokens / keys
+.bridge-token
+*.bridge-token
+*.token
+*.pem
+*.key
+secrets.json
+
 # Python
 __pycache__/
 *.py[cod]

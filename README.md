@@ -6,13 +6,13 @@
 
 **Too many WhatsApp groups. Updates landing across every channel, all day. Endlessly scrolling back through threads and hopping between chats so you don't miss the one message that actually mattered — that's WhatsApp burnout. This is our answer.**
 
-A self-hosted layer on top of a WhatsApp [MCP](https://modelcontextprotocol.io/) bridge that *watches your groups for you*: it filters the firehose through an LLM and delivers only what matters to your own "message yourself" chat — as **realtime alerts** the moment something relevant lands, and **scheduled AI digests** that distil a week of noise into a short, high-signal summary.
+A self-hosted layer on top of a WhatsApp [MCP](https://modelcontextprotocol.io/) bridge that collapses all your noisy groups into **one channel with the key information only** — your own "message yourself" chat. An LLM reads every group and produces **scheduled digests that combine what matters across all your channels** into a single summary, then **keeps those summaries current in real time** — revising an entry in place as plans change, instead of leaving you to reconcile a dozen threads yourself.
 
 > **This is a personal fork.** It builds on [`verygoodplugins/whatsapp-mcp`](https://github.com/verygoodplugins/whatsapp-mcp) — itself a fork of the original [`lharries/whatsapp-mcp`](https://github.com/lharries/whatsapp-mcp) created by [Luke Harries](https://github.com/lharries). The upstream MCP bridge + server are largely unchanged; full credit to those authors (see [Credits & History](#credits--history)).
 >
 > **What this fork adds**
-> - A webhook-driven **realtime alerter** that filters incoming group messages through an LLM and pushes only what matters to your self-chat — architecture in [docs/realtime-alerter.md](docs/realtime-alerter.md).
-> - A scheduled **AI digest** that curates high-signal items (releases, tools, links, takeaways) out of noisy chats.
+> - **Scheduled AI digests** that merge the key information from all your groups into one summary — grouped, deduped, high-signal, no chatter.
+> - **Live-updating summaries** — as new messages land, an LLM updates the shared ledger behind the digest, so a changed time / venue / plan revises the existing entry (flagged `(updated)`) instead of adding noise. Architecture in [docs/realtime-alerter.md](docs/realtime-alerter.md).
 > - Bridge tweaks: document attachments in webhook forwarding, and headless **pairing-code login** (`WA_PAIR_PHONE`) for servers with no scannable QR.
 >
 > Both pipelines ship as a self-contained package in [`alerter/`](alerter/) — see its [README](alerter/README.md) for setup.

@@ -17,12 +17,36 @@ two channels can't disagree and repeated messages don't re-alert.
 
 ## Prerequisites
 
+**You host this yourself** — everything runs on one always-on machine you control (a small
+VPS/VM, a home server, a Raspberry Pi, or a desktop that stays on). There is no hosted/cloud
+option; while the host is off, no messages are processed. Your WhatsApp account is linked to it as
+a companion device (the same way WhatsApp Web works), and all data stays on that machine.
+
 - The WhatsApp **bridge** running with webhook forwarding enabled (`WEBHOOK_URL` pointing at this
   listener, e.g. `http://localhost:8769/whatsapp/webhook`). See the repo root README.
 - The **`claude` CLI** on `PATH` and authenticated (used headlessly via `claude -p`).
 - **Python 3.11+** (standard library only — no extra packages).
 - Linux with **systemd user services** for scheduling (optional; you can also run the scripts by
   hand or from cron).
+
+## Using an API key (vs a subscription)
+
+The scripts reach Claude by calling the headless `claude -p` CLI, which uses whatever the CLI is
+configured with — so switching auth needs **no code change**:
+
+- **Subscription (default):** run `claude login` once. The CLI stores an OAuth token in
+  `~/.claude/.credentials.json` and the scripts reuse it. Billed against your Claude plan.
+- **API key:** set `ANTHROPIC_API_KEY` in the service environment — the CLI picks it up
+  automatically. Add `Environment=ANTHROPIC_API_KEY=sk-ant-…` (or an `EnvironmentFile=` pointing at
+  a `0600` secrets file) to each `wa-*.service` unit, then `systemctl --user daemon-reload`. Billed
+  per token.
+
+To drop the CLI dependency entirely and call the Anthropic API directly (e.g. no Node install),
+replace the `subprocess.run(["claude", "-p", prompt])` block in `listener.py` (`claude_extract`),
+`digest.py` (`reconcile_group`) and `topics_digest.py` (`extract_chunk`) with the `anthropic`
+Python SDK's `messages.create(...)`. The main extra work is media: the CLI reads local image/PDF
+files via `--allowedTools Read`, whereas the SDK needs the bytes inline as image/document content
+blocks.
 
 ## Install
 

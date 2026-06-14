@@ -12,6 +12,8 @@ A Model Context Protocol (MCP) server for WhatsApp, plus a self-hosted layer on 
 > - A webhook-driven **realtime alerter** that filters incoming group messages through an LLM and pushes only what matters to your self-chat — architecture in [docs/realtime-alerter.md](docs/realtime-alerter.md).
 > - A scheduled **AI digest** that curates high-signal items (releases, tools, links, takeaways) out of noisy chats.
 > - Bridge tweaks: document attachments in webhook forwarding, and headless **pairing-code login** (`WA_PAIR_PHONE`) for servers with no scannable QR.
+>
+> Both pipelines ship as a self-contained package in [`alerter/`](alerter/) — see its [README](alerter/README.md) for setup.
 
 <p align="center">
   <a href="https://github.com/user-attachments/assets/9475af1d-2369-4315-9ccc-823dba2c5c32"><strong>Watch the WhatsApp MCP demo video</strong></a>

@@ -1,0 +1,11 @@
+# Install to ~/.config/systemd/user/wa-topics-digest.timer
+# Append a timezone if you want a fixed local time, e.g. "08:00:00 Europe/Dublin".
+[Unit]
+Description=Run the WhatsApp weekly AI digest on Monday 08:00
+
+[Timer]
+OnCalendar=Mon *-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+# Install to ~/.config/systemd/user/wa-alerts.service
+# PATH must include the `claude` CLI (here ~/.npm-global/bin) and python3.
+[Unit]
+Description=WhatsApp realtime alerter (listener)
+After=wa-bridge.service
+Wants=wa-bridge.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/wa-alerts
+Environment=PATH=%h/.npm-global/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=WA_ALERT_CONFIG=%h/.config/wa-alerts/config.json
+ExecStart=/usr/bin/python3 %h/.local/share/wa-alerts/listener.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+# Install to ~/.config/systemd/user/wa-digest.service (triggered by wa-digest.timer)
+[Unit]
+Description=WhatsApp training digest (per-child weekly window)
+After=wa-bridge.service
+Wants=wa-bridge.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/.local/share/wa-alerts
+Environment=PATH=%h/.npm-global/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=WA_ALERT_CONFIG=%h/.config/wa-alerts/config.json
+ExecStart=/usr/bin/python3 %h/.local/share/wa-alerts/digest.py

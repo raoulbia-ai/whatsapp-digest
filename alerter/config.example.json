@@ -1,0 +1,54 @@
+{
+  "_note": "Copy to ~/.config/wa-alerts/config.json and fill in. JIDs and self_jid are discovered via the MCP server's list_chats tool (or the bridge). Edits to this file take effect live for the listener.",
+
+  "bind": "127.0.0.1",
+  "port": 8769,
+  "webhook_path": "/whatsapp/webhook",
+
+  "bridge_url": "http://localhost:8080/api",
+  "bridge_token_path": "/path/to/whatsapp-mcp/whatsapp-bridge/store/.bridge-token",
+  "messages_db": "/path/to/whatsapp-mcp/whatsapp-bridge/store/messages.db",
+
+  "self_jid": "<your-number>@s.whatsapp.net",
+
+  "_note_training": "----- Realtime training alerter (listener.py + digest.py). Omit these keys if you only want the AI digest. -----",
+  "target_chats": [
+    "<group-jid-1>@g.us",
+    "<group-jid-2>@g.us"
+  ],
+  "target_names": {
+    "<group-jid-1>@g.us": "Example FC Under 10s",
+    "<group-jid-2>@g.us": "Example GAA U12"
+  },
+  "chat_kids": {
+    "<group-jid-1>@g.us": "Alex",
+    "<group-jid-2>@g.us": "Sam"
+  },
+  "chat_ignore": {
+    "<group-jid-2>@g.us": "free-text description of messages to always treat as NOT relevant for this group (e.g. 'asks whether spare players are free for Saturday')"
+  },
+  "alert_prefix": "🔔",
+  "claude_timeout": 120,
+  "claude_cwd": "/tmp",
+  "prefilter_keywords": [
+    "train", "training", "practice", "session",
+    "match", "game", "fixture", "kick", "kickoff", "kick-off",
+    "pitch", "field", "ground", "venue",
+    "cancel", "cancelled", "postpone", "postponed", "rescheduled",
+    "kit", "strip", "jersey", "boots", "shin",
+    "meet", "meeting point", "carpool", "lift", "warm-up", "warmup",
+    "saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday",
+    "am", "pm", "o'clock", "tournament", "cup", "league"
+  ],
+
+  "_note_topics": "----- Weekly curated AI digest (topics_digest.py). Omit if you only want the training alerter. -----",
+  "topic_digest": {
+    "channels": {
+      "<channel-jid-1>@g.us": "Channel One",
+      "<channel-jid-2>@g.us": "Channel Two"
+    },
+    "lookback_days": 7,
+    "seen_file": "topics_seen.json",
+    "seen_ttl_days": 120
+  }
+}

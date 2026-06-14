@@ -1,0 +1,12 @@
+# Install to ~/.config/systemd/user/wa-digest.timer
+# Append a timezone if you want a fixed local time, e.g. "08:00:00 Europe/Dublin".
+[Unit]
+Description=Run the WhatsApp training digest at 08:00 and 18:00
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+OnCalendar=*-*-* 18:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

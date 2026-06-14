@@ -2398,11 +2398,30 @@ func main() {
 				continue
 			}
 
-			// Print QR code for pairing with phone
+			// If WA_PAIR_PHONE is set, use pairing-code login (headless-friendly):
+			// the user types an 8-char code into WhatsApp instead of scanning a QR.
+			pairPhone := strings.TrimSpace(os.Getenv("WA_PAIR_PHONE"))
+			if pairPhone != "" {
+				// Display name MUST be formatted "Browser (OS)" with a common browser/OS,
+				// or WhatsApp's server rejects the request with 400 bad-request.
+				code, perr := client.PairPhone(ctx, pairPhone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
+				if perr != nil {
+					logger.Errorf("Failed to request pairing code: %v", perr)
+				} else {
+					fmt.Println("\n==================================================")
+					fmt.Printf("  Link with phone number. In WhatsApp, enter this code:\n\n      %s\n\n", code)
+					fmt.Println("  WhatsApp -> Settings -> Linked Devices -> Link a Device")
+					fmt.Println("  -> Link with phone number instead -> enter the code above")
+					fmt.Println("==================================================")
+					fmt.Println("\nWaiting for pairing-code entry...")
+				}
+			}
+
+			// Print QR code for pairing with phone (skipped when using a pairing code)
 			qrCodeShown := false
 			for evt := range qrChan {
 				if evt.Event == "code" {
-					if !qrCodeShown {
+					if pairPhone == "" && !qrCodeShown {
 						fmt.Println("\nScan this QR code with your WhatsApp app:")
 						qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
 						fmt.Println("\nWaiting for QR code scan...")

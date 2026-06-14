@@ -1,13 +1,17 @@
-# WhatsApp MCP Server
+# WhatsApp Digest
 
-[![CI](https://github.com/verygoodplugins/whatsapp-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/verygoodplugins/whatsapp-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Go 1.25+](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev/)
 
-A Model Context Protocol (MCP) server for WhatsApp, enabling Claude to read and send WhatsApp messages.
+A Model Context Protocol (MCP) server for WhatsApp, plus a self-hosted layer on top of it that turns incoming messages into **realtime alerts** and **scheduled AI digests** delivered to your own WhatsApp chat.
 
-> Originally created by [Luke Harries](https://github.com/lharries/whatsapp-mcp). Maintained by [Very Good Plugins](https://verygoodplugins.com/?utm_source=github).
+> **This is a personal fork.** It builds on [`verygoodplugins/whatsapp-mcp`](https://github.com/verygoodplugins/whatsapp-mcp) — itself a fork of the original [`lharries/whatsapp-mcp`](https://github.com/lharries/whatsapp-mcp) created by [Luke Harries](https://github.com/lharries). The upstream MCP bridge + server are largely unchanged; full credit to those authors (see [Credits & History](#credits--history)).
+>
+> **What this fork adds**
+> - A webhook-driven **realtime alerter** that filters incoming group messages through an LLM and pushes only what matters to your self-chat — architecture in [docs/realtime-alerter.md](docs/realtime-alerter.md).
+> - A scheduled **AI digest** that curates high-signal items (releases, tools, links, takeaways) out of noisy chats.
+> - Bridge tweaks: document attachments in webhook forwarding, and headless **pairing-code login** (`WA_PAIR_PHONE`) for servers with no scannable QR.
 
 <p align="center">
   <a href="https://github.com/user-attachments/assets/9475af1d-2369-4315-9ccc-823dba2c5c32"><strong>Watch the WhatsApp MCP demo video</strong></a>
@@ -42,8 +46,8 @@ A Model Context Protocol (MCP) server for WhatsApp, enabling Claude to read and 
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/verygoodplugins/whatsapp-mcp.git
-   cd whatsapp-mcp
+   git clone https://github.com/raoulbia-ai/whatsapp-digest.git
+   cd whatsapp-digest
    ```
 
 2. **Start the WhatsApp bridge**

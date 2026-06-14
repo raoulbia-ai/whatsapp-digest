@@ -4,7 +4,9 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Go 1.25+](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev/)
 
-A Model Context Protocol (MCP) server for WhatsApp, plus a self-hosted layer on top of it that turns incoming messages into **realtime alerts** and **scheduled AI digests** delivered to your own WhatsApp chat.
+**Too many WhatsApp groups. Updates landing across every channel, all day. Endlessly scrolling back through threads and hopping between chats so you don't miss the one message that actually mattered — that's WhatsApp burnout. This is our answer.**
+
+A self-hosted layer on top of a WhatsApp [MCP](https://modelcontextprotocol.io/) bridge that *watches your groups for you*: it filters the firehose through an LLM and delivers only what matters to your own "message yourself" chat — as **realtime alerts** the moment something relevant lands, and **scheduled AI digests** that distil a week of noise into a short, high-signal summary.
 
 > **This is a personal fork.** It builds on [`verygoodplugins/whatsapp-mcp`](https://github.com/verygoodplugins/whatsapp-mcp) — itself a fork of the original [`lharries/whatsapp-mcp`](https://github.com/lharries/whatsapp-mcp) created by [Luke Harries](https://github.com/lharries). The upstream MCP bridge + server are largely unchanged; full credit to those authors (see [Credits & History](#credits--history)).
 >

@@ -89,9 +89,8 @@ Copy `.env.example` to `.env` and configure as needed:
 | `WHATSMEOW_DB_PATH`    | `../whatsapp-bridge/store/whatsapp.db`   | whatsmeow DB used for LID ↔ phone resolution |
 | `WHATSAPP_API_URL`     | `http://localhost:8080/api`              | Go bridge REST API URL                       |
 | `WHATSAPP_BRIDGE_TOKEN` | generated in `whatsapp-bridge/store/.bridge-token` | Bearer token required for bridge REST calls |
-| `WHATSAPP_MEDIA_ROOTS` | `~/.local/share/whatsapp-mcp/outbox`     | Path-list of directories allowed for outbound media files |
 
-### Bridge authentication and media paths
+### Bridge authentication
 
 The bridge requires bearer-token authentication for every `/api/*` request and
 accepts only exact loopback Host headers for its configured port. This protects
@@ -99,15 +98,10 @@ the local REST API from other local processes and browser DNS-rebinding attacks.
 
 On first start, the bridge generates a 256-bit token, writes it to
 `whatsapp-bridge/store/.bridge-token` with owner-only permissions, and prints a
-setup banner. The MCP server reads `WHATSAPP_BRIDGE_TOKEN` first, then falls
-back to that token file. For split deployments, containers, or process managers
-that do not share the repository directory, set the same
-`WHATSAPP_BRIDGE_TOKEN` value for both the bridge and MCP server.
-
-Outbound `media_path` values are confined to `WHATSAPP_MEDIA_ROOTS`. The default
-outbox is `~/.local/share/whatsapp-mcp/outbox`, created on bridge startup. Move
-files there before calling `send_file` or `send_audio_message`, or set
-`WHATSAPP_MEDIA_ROOTS` to a colon-separated list of absolute directories.
+setup banner. Readers (the digest pipeline / MCP server) use `WHATSAPP_BRIDGE_TOKEN`
+first, then fall back to that token file. For split deployments, containers, or
+process managers that do not share the repository directory, set the same
+`WHATSAPP_BRIDGE_TOKEN` value for both the bridge and its readers.
 
 ### CLI flags (Go bridge)
 

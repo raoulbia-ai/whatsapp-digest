@@ -6,24 +6,20 @@
 
 **Too many WhatsApp groups. Updates landing across every channel, all day. Endlessly scrolling back through threads and hopping between chats so you don't miss the one message that actually mattered — that's WhatsApp burnout. This is our answer.**
 
-A self-hosted layer on top of a WhatsApp [MCP](https://modelcontextprotocol.io/) bridge that collapses all your noisy groups into **one channel with the key information only** — your own "message yourself" chat. An LLM reads every group and produces **scheduled digests that combine what matters across all your channels** into a single summary, then **keeps those summaries current in real time** — revising an entry in place as plans change, instead of leaving you to reconcile a dozen threads yourself.
+WhatsApp Digest collapses all your noisy groups into **one channel with the key information only** — your own "message yourself" chat. An LLM reads every group and produces **scheduled digests that combine what matters across all your channels** into a single summary, then **keeps those summaries current in real time** — revising an entry in place as plans change, instead of leaving you to reconcile a dozen threads yourself. It's self-hosted: everything runs on your own machine and your messages never leave it.
 
-> **This is a personal fork.** It builds on [`verygoodplugins/whatsapp-mcp`](https://github.com/verygoodplugins/whatsapp-mcp) — itself a fork of the original [`lharries/whatsapp-mcp`](https://github.com/lharries/whatsapp-mcp) created by [Luke Harries](https://github.com/lharries). The upstream MCP bridge + server are largely unchanged; full credit to those authors (see [Credits & History](#credits--history)).
->
-> **What this fork adds**
-> - **Scheduled AI digests** that merge the key information from all your groups into one summary — grouped, deduped, high-signal, no chatter.
-> - **Live-updating summaries** — as new messages land, an LLM updates the shared ledger behind the digest, so a changed time / venue / plan revises the existing entry (flagged `(updated)`) instead of adding noise. Architecture in [docs/realtime-alerter.md](docs/realtime-alerter.md).
-> - Bridge tweaks: document attachments in webhook forwarding, and headless **pairing-code login** (`WA_PAIR_PHONE`) for servers with no scannable QR.
->
-> Both pipelines ship as a self-contained package in [`alerter/`](alerter/) — see its [README](alerter/README.md) for setup.
+## How it works
 
-<p align="center">
-  <a href="https://github.com/user-attachments/assets/9475af1d-2369-4315-9ccc-823dba2c5c32"><strong>Watch the WhatsApp MCP demo video</strong></a>
-</p>
+Two pipelines ship as a self-contained package in [`alerter/`](alerter/):
 
-<p align="center">
-  <sub>Product demo generated with Remotion using simulated data.</sub>
-</p>
+- **Scheduled AI digests** that merge the key information from all your groups into one summary — grouped, deduped, high-signal, no chatter.
+- **Live-updating summaries** — as new messages land, an LLM updates the shared ledger behind the digest, so a changed time / venue / plan revises the existing entry (flagged `(updated)`) instead of adding noise.
+
+The design decision that makes it reliable: the LLM **only extracts structured facts** from messages; the **code** owns memory, de-duplication, and rendering. Every event is one deterministically-keyed record in a ledger, so the digest renders the same way every time instead of drifting. Architecture in [docs/realtime-alerter.md](docs/realtime-alerter.md).
+
+Under the hood the digest layer reads from a WhatsApp [MCP](https://modelcontextprotocol.io/) bridge — a Go service linked to WhatsApp as a companion device, plus a Python MCP server. The bridge also adds document attachments in webhook forwarding and headless **pairing-code login** (`WA_PAIR_PHONE`) for servers with no scannable QR.
+
+**Start here:** the [`alerter/` README](alerter/README.md) covers digest setup. The rest of this document documents the underlying bridge + MCP server the digest runs on.
 
 ## Features
 
@@ -627,11 +623,6 @@ go build -o whatsapp-bridge
 go run .
 ```
 
-### Releasing (Maintainers)
-
-Releases use Release Please automation; maintainer steps and fallback procedures
-are documented in [docs/RELEASING.md](docs/RELEASING.md).
-
 ## Troubleshooting
 
 ### Authentication Issues
@@ -708,37 +699,12 @@ go run .
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## Credits & History
+## Credits
 
-This project is a maintained fork of [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp), originally created by [Luke Harries](https://github.com/lharries).
-
-**Why we forked:** The original repository hasn't been updated since April 2025. We needed continued maintenance, bug fixes, and new features for production use.
-
-**Highlights since the fork:**
-
-- `/api/typing`, `/api/health`, and webhook forwarding (with reply context + image media)
-- Auto-download of incoming media with collision-safe filenames
-- `get_contact` tool, `sender_display` field, and LID ↔ phone resolution via the whatsmeow store
-- Live capture of incoming voice/video calls into a `calls` table
-- `--full-history-pair` flag to request extended history at pair time
-- Resilience: recovers from `StreamReplaced` session conflicts; pinned `anyio` to dodge a cancel-scope regression
-- CI/CD with GitHub Actions, Release Please for automated versioning, and Dependabot
-
-The full release-by-release list lives in [CHANGELOG.md](CHANGELOG.md).
-
-**Recent contributors** (huge thanks):
-
-- [@edmenendez](https://github.com/edmenendez) — call capture (#39), full-history flag (#37), caption surfacing (#42), media filename collisions (#40), download race fix (#41), LID matching (#43), contact resolution via whatsmeow store (#30)
-- [@davidsimoes](https://github.com/davidsimoes) — `StreamReplaced` recovery (#27)
-- [@davidggphy](https://github.com/davidggphy) — LID → phone JID consistency (#12)
-- [@maikol-solis](https://github.com/maikol-solis) — bridge run command fix (#23)
-- [@DeetBot](https://github.com/DeetBot) — `anyio` cancel-scope pin (#44)
-
-And to Luke for creating the original project. See [CONTRIBUTING.md](CONTRIBUTING.md) if you'd like to join in.
+The WhatsApp Digest layer (`alerter/`) and the bridge changes it relies on are maintained here. The underlying MCP bridge + server are a fork of [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp) by [Luke Harries](https://github.com/lharries) (via [verygoodplugins/whatsapp-mcp](https://github.com/verygoodplugins/whatsapp-mcp)) — full credit to those authors. MIT-licensed; see [CONTRIBUTING.md](CONTRIBUTING.md) to get involved.
 
 ## Links
 
-- [Very Good Plugins](https://verygoodplugins.com/?utm_source=github)
 - [MCP Specification](https://modelcontextprotocol.io/)
 - [whatsmeow](https://github.com/tulir/whatsmeow) - WhatsApp Web API library for Go
 - [FastMCP](https://github.com/jlowin/fastmcp) - Fast Model Context Protocol implementation

@@ -5,7 +5,7 @@ description = "WhatsApp integration for Claude via Model Context Protocol (MCP)"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
-    { name = "Very Good Plugins", email = "support@verygoodplugins.com" }
+    { name = "raoulbia-ai" }
 ]
 keywords = ["whatsapp", "mcp", "claude", "ai", "messaging"]
 classifiers = [
@@ -30,15 +30,12 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/verygoodplugins/whatsapp-mcp"
-Repository = "https://github.com/verygoodplugins/whatsapp-mcp"
-Issues = "https://github.com/verygoodplugins/whatsapp-mcp/issues"
+Homepage = "https://github.com/raoulbia-ai/whatsapp-digest"
+Repository = "https://github.com/raoulbia-ai/whatsapp-digest"
+Issues = "https://github.com/raoulbia-ai/whatsapp-digest/issues"
 
 [tool.setuptools]
 py-modules = ["main", "whatsapp", "audio"]
-
-[tool.mcp]
-name = "io.github.verygoodplugins/whatsapp-mcp"
 
 [tool.ruff]
 line-length = 120

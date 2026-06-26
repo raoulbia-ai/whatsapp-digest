@@ -33,13 +33,15 @@ Under the hood the digest layer reads from a WhatsApp [MCP](https://modelcontext
 
 ## Installation
 
+This sets up the **bridge** (which links your WhatsApp) and points you at the **digest** (the product). Both run headless on a machine you control — a VM, home server, or Pi. Claude Desktop / Cursor are **optional** and only needed if you also want to query your WhatsApp interactively from an MCP client; the digest itself does not use them.
+
 ### Prerequisites
 
 - Go 1.25+
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) package manager
-- Claude Desktop or Cursor
 - FFmpeg (optional, for voice message conversion)
+- Claude Desktop or Cursor (optional — interactive use only)
 
 ### Quick Start
 
@@ -59,31 +61,59 @@ Under the hood the digest layer reads from a WhatsApp [MCP](https://modelcontext
 
    On first start, the bridge prints and stores a local REST API token at
    `whatsapp-bridge/store/.bridge-token`. Scan the QR code with WhatsApp on
-   your phone to authenticate.
+   your phone to authenticate. On a headless server with no scannable QR, use
+   pairing-code login via `WA_PAIR_PHONE`.
 
-3. **Configure Claude Desktop**
+3. **Set up the digest** — this is the product.
 
-   Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+   Follow the [`alerter/` README](alerter/README.md) to configure scheduled
+   digests and live-updating summaries. It runs headless (systemd timers + the
+   `claude` CLI); no desktop app is involved.
 
-   ```json
-   {
-     "mcpServers": {
-       "whatsapp": {
-         "command": "uv",
-         "args": [
-           "--directory",
-           "/path/to/whatsapp-mcp/whatsapp-mcp-server",
-           "run",
-           "main.py"
-         ]
-       }
-     }
-   }
-   ```
+### Optional: chat with WhatsApp interactively
 
-   Replace `/path/to/whatsapp-mcp` with your actual path.
+Only needed if you also want to query your WhatsApp from an MCP client (separate
+from the digest). Point your client at the Python MCP server.
 
-4. **Restart Claude Desktop**
+**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "whatsapp": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/whatsapp-digest/whatsapp-mcp-server",
+        "run",
+        "main.py"
+      ]
+    }
+  }
+}
+```
+
+**Cursor** — add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "whatsapp": {
+        "command": "uv",
+        "args": [
+          "--directory",
+          "/path/to/whatsapp-digest/whatsapp-mcp-server",
+          "run",
+          "main.py"
+        ]
+      }
+    }
+  }
+}
+```
+
+Replace `/path/to/whatsapp-digest` with your actual clone path, then restart the client.
 
 ### Updating
 
@@ -105,28 +135,6 @@ For `v0.2.1` and later, restart both the bridge and MCP server after updating
 so the MCP server can read the bridge token. If the two components do not share
 the same checkout, set the same `WHATSAPP_BRIDGE_TOKEN` value in both
 environments.
-
-### Cursor IDE Configuration
-
-Add to your Cursor MCP settings (`~/.cursor/mcp.json`):
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "whatsapp": {
-        "command": "uv",
-        "args": [
-          "--directory",
-          "/path/to/whatsapp-mcp/whatsapp-mcp-server",
-          "run",
-          "main.py"
-        ]
-      }
-    }
-  }
-}
-```
 
 ## Tools
 
@@ -701,7 +709,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Credits
 
-The WhatsApp Digest layer (`alerter/`) and the bridge changes it relies on are maintained here. The underlying MCP bridge + server are a fork of [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp) by [Luke Harries](https://github.com/lharries) (via [verygoodplugins/whatsapp-mcp](https://github.com/verygoodplugins/whatsapp-mcp)) — full credit to those authors. MIT-licensed; see [CONTRIBUTING.md](CONTRIBUTING.md) to get involved.
+The WhatsApp Digest layer (`alerter/`) and the bridge changes it relies on are maintained here. The underlying MCP bridge + server are a fork of [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp) by [Luke Harries](https://github.com/lharries) (via [verygoodplugins/whatsapp-mcp](https://github.com/verygoodplugins/whatsapp-mcp)) — full credit to those authors. MIT-licensed.
 
 ## Links
 

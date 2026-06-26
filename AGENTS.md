@@ -1,22 +1,19 @@
 # AGENTS.md
 
-Guidance for AI coding agents (Claude Code, Cursor, Codex, etc.) and for human contributors using them in this repository.
-
-This file is the single source of truth for "how to contribute here". `CLAUDE.md` exists for tooling that looks for that filename and points to this file.
+Guidance for AI coding agents (Claude Code, Cursor, Codex, etc.) working in this repository. `CLAUDE.md` just points here.
 
 ## Repository
 
-- **Repo:** [`verygoodplugins/whatsapp-mcp`](https://github.com/verygoodplugins/whatsapp-mcp)
-- **Origin remote:** always `origin` (this fork). PRs, issues, and `gh` commands target this fork, not the upstream `lharries/whatsapp-mcp`.
-- **Default branch:** `main`. All PRs target `main`.
-- **Releases:** automated via [release-please](https://github.com/googleapis/release-please) — do **not** hand-edit `CHANGELOG.md` or version numbers.
+- **Repo:** [`raoulbia-ai/whatsapp-digest`](https://github.com/raoulbia-ai/whatsapp-digest) (remote `origin`). It's a personal fork of [`lharries/whatsapp-mcp`](https://github.com/lharries/whatsapp-mcp) (via `verygoodplugins/whatsapp-mcp`, kept as the `upstream` remote).
+- **Default branch:** `main`.
+- **What's ours:** the WhatsApp Digest layer in [`alerter/`](alerter/) (scheduled AI digests + live-updating summaries) and the bridge tweaks it relies on. The MCP bridge + server underneath are inherited from upstream.
 
 ## Architecture (read first)
 
-Two components, one repo:
+Three layers, one repo:
 
 ```
-whatsapp-mcp/
+whatsapp-digest/
 ├── whatsapp-bridge/        # Go bridge — talks to WhatsApp Web via whatsmeow
 │   ├── main.go             # REST API + event loop
 │   ├── webhook.go          # Outgoing webhook for incoming messages
@@ -25,32 +22,15 @@ whatsapp-mcp/
 │   ├── main.py             # FastMCP tool definitions
 │   ├── whatsapp.py         # DB queries + bridge HTTP client
 │   └── audio.py            # FFmpeg helpers
-└── .github/                # CI, release, security workflows
+└── alerter/                # The digest layer (this fork's addition)
 ```
 
-Data flow: AI client → MCP server (Python) → reads SQLite directly **or** calls bridge REST (`http://localhost:8080/api/*` by default; configurable via `WHATSAPP_API_URL` and `WHATSAPP_BRIDGE_PORT`) → bridge (Go) → WhatsApp Web.
+Data flow: AI client → MCP server (Python) → reads SQLite directly **or** calls bridge REST (`http://localhost:8080/api/*` by default; configurable via `WHATSAPP_API_URL` / `WHATSAPP_BRIDGE_PORT`) → bridge (Go) → WhatsApp Web. The digest layer reads from the bridge's webhook + `messages.db` and calls an LLM (the `claude` CLI) to extract structured facts; see [docs/realtime-alerter.md](docs/realtime-alerter.md).
 
 Two SQLite databases:
 
 - `whatsapp.db` — owned by whatsmeow (sessions, contacts, LID map). Treat as opaque.
 - `messages.db` — owned by the bridge (chats, messages). Schema is ours.
-
-## Scope rules
-
-Before writing code, check [`ROADMAP.md`](./ROADMAP.md). Anything in "out of scope" should be turned into a polite "won't ship" reply, not a PR.
-
-If unsure whether something is in scope, **open an issue first**. Do not open a PR larger than ~300 LOC without prior discussion.
-
-## PR rules
-
-1. **One concern per PR.** A PR titled "feat: X and also fix Y and refactor Z" gets sent back. Split it.
-2. **Conventional commits in the title.** `feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `refactor:`, `test:`, `perf:`. Use `!` (`feat!:`) or `BREAKING CHANGE:` in the body for breaking changes.
-3. **Reference an issue** for any `feat:` PR (`Closes #N`). Bug fixes don't strictly require an issue but are easier to review with one.
-4. **Update docs in the same PR.** README, `CLAUDE.md`/`AGENTS.md`, or inline tool descriptions if you changed user-visible behavior.
-5. **Tests.** Add or update tests for any code you touch in `whatsapp-mcp-server/`. The Go bridge has fewer tests today; matching the existing bar is fine, but don't *remove* coverage.
-6. **No drive-by formatting.** Don't reformat files you didn't otherwise change. Keep diffs reviewable.
-7. **No new top-level dependencies** without justification in the PR description.
-8. **Security-sensitive changes** (auth, file paths, network bind, command exec) get extra scrutiny — call them out in the PR body.
 
 ## Local commands
 
@@ -71,26 +51,9 @@ uv run ruff check .         # lint
 uv run ruff format .        # format
 ```
 
-## CI gates
+## CI
 
-Every PR runs (see `.github/workflows/`). Not every job is blocking today:
-
-**Blocking — must be green to merge:**
-
-- `Python Lint` (`ruff check` + `ruff format --check`)
-- `Python Tests` (`pytest`)
-- `Go Lint` (`golangci-lint`)
-- `Go Build`
-- `Version Consistency` (Python pkg version vs `.release-please-manifest.json`)
-- `CodeQL Analysis (Python | Go)`
-
-**Informational — runs on every PR but won't fail the build today (`continue-on-error: true`):**
-
-- `Bandit Security Scan`
-- `Python Dependency Audit` (`pip-audit`)
-- `Go Vulnerability Check` (`govulncheck`)
-
-A failing blocking job is a hard block — fix it or explain in the PR why it's unrelated. For informational scans, investigate findings and either fix them or note in the PR why they're acceptable.
+`.github/workflows/ci.yml` runs on every push/PR: Python lint (`ruff`), Python tests (`pytest`), Go lint (`golangci-lint`), Go build. `security.yml` runs CodeQL + dependency scans. Keep these green.
 
 ## Environment variables
 
@@ -103,7 +66,7 @@ A failing blocking job is a hard block — fix it or explain in the PR why it's 
 | `WHATSAPP_BRIDGE_TOKEN` | generated in `whatsapp-bridge/store/.bridge-token` | Bearer token required for bridge REST calls |
 | `WHATSAPP_MEDIA_ROOTS` | `~/.local/share/whatsapp-mcp/outbox` | Path-list of directories allowed for outbound media files |
 | `WEBHOOK_URL` | `http://localhost:8769/whatsapp/webhook` | Outgoing webhook for incoming messages (empty = disabled) |
-| `FORWARD_SELF` | `true` | Whether self-sent messages are forwarded (`getEnvBool` default; set `FORWARD_SELF=false` to disable) |
+| `FORWARD_SELF` | `true` | Whether self-sent messages are forwarded |
 
 When adding a new env var: document it here, in `README.md`, and in `.env.example`.
 
@@ -113,8 +76,9 @@ When adding a new env var: document it here, in `README.md`, and in `.env.exampl
 2. **Media files** live under `store/{chat_jid}/` with timestamp + message-ID filenames. Don't hand-construct these paths in client code; use the bridge's `/api/download` endpoint.
 3. **Audio.** WhatsApp voice messages must be Opus `.ogg`. The MCP server's `send_audio_message` tool auto-converts via FFmpeg if installed.
 4. **History sync** is controlled by the *primary* device (the phone). The bridge can request more (see the `--full-history-pair` flag), but the phone has the final word.
-5. **`messages.db` is the source of truth for the MCP server.** Don't make the MCP server dependent on the bridge being up for *read* operations.
+5. **`messages.db` is the source of truth for the MCP server.** Don't make read operations depend on the bridge being up.
 6. **Outgoing calls are not visible to linked devices.** Don't promise features that depend on them.
+7. **Digest reliability.** The LLM only *extracts* structured facts; the code owns memory, de-duplication, and rendering against a deterministically-keyed ledger. Keep that split — don't push state decisions into the prompt.
 
 ## Where to make changes
 
@@ -124,21 +88,13 @@ When adding a new env var: document it here, in `README.md`, and in `.env.exampl
 | Change DB queries / data conversion | `whatsapp-mcp-server/whatsapp.py` |
 | Change bridge REST API or event handling | `whatsapp-bridge/main.go` |
 | Change webhook payload | `whatsapp-bridge/webhook.go` |
+| Change digest extraction / rendering | `alerter/` (see its README) |
 | Change CI behavior | `.github/workflows/*.yml` |
-| Change release behavior | `release-please-config.json`, `.release-please-manifest.json` |
 
 ## Persona for AI agents working in this repo
 
 - **Be terse.** Don't restate the question.
 - **Be decisive.** Pick the smallest change that fixes the problem.
 - **Bias to action** for low-risk improvements (lint, tests, error messages, comments that explain *why*).
-- **Ask** before architectural changes, dependency additions, or anything in `ROADMAP.md`'s "out of scope".
+- **Ask** before architectural changes or dependency additions.
 - **Cite files with `path:line`** when discussing code.
-- **Never** edit `CHANGELOG.md`, version constants in `pyproject.toml`/`go.mod`, or `.release-please-manifest.json` directly.
-
-## Reporting bugs / requesting features
-
-- Bugs: use the **Bug report** issue template. Include bridge + MCP server versions, OS, exact reproduction.
-- Features: use the **Feature request** template. State the problem, not the solution. Confirm it fits `ROADMAP.md`.
-
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the human-facing contribution guide.

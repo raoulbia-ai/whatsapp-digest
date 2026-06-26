@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+> This repository is a personal fork of [`verygoodplugins/whatsapp-mcp`](https://github.com/verygoodplugins/whatsapp-mcp)
+> (itself a fork of [`lharries/whatsapp-mcp`](https://github.com/lharries/whatsapp-mcp)),
+> forked at **v0.3.0**. The entries up to and including 0.3.0 below are the upstream
+> history, so their issue/commit links point at the upstream repository. Changes made in
+> this fork — including the WhatsApp Digest layer (`alerter/`) — are tracked in the git
+> log here rather than as tagged releases.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 

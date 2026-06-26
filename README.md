@@ -438,62 +438,6 @@ CREATE TABLE calls (
   calls via `CallOfferNotice` include a `Media` field and are recorded
   accurately as voice or video.
 
-## Architecture
-
-The digest runs as a small always-on pipeline. The bridge links WhatsApp and emits a webhook on every incoming message; a Python layer extracts structured facts with an LLM and writes them to a ledger; digests and alerts render from that ledger and are delivered back through the same bridge into your own "message yourself" chat — so the only delivery surface is WhatsApp itself. Full detail in [docs/realtime-alerter.md](docs/realtime-alerter.md).
-
-```mermaid
-flowchart TB
-    WA[WhatsApp servers]
-
-    subgraph Host["Your always-on machine"]
-        subgraph Bridge["WhatsApp bridge (Go, whatsmeow)"]
-            GO[REST API + event loop]
-            DB[(SQLite<br/>messages.db)]
-        end
-
-        subgraph Pipeline["Digest layer (Python + claude CLI)"]
-            LIS[Listener<br/>filter target groups]
-            CLA[claude -p<br/>extracts structured facts]
-            LED[(Event ledger<br/>one record per event)]
-            REN[Render<br/>dedup + digest / alert]
-        end
-    end
-
-    WA <-->|linked device, websocket| GO
-    GO -->|store| DB
-    GO -->|webhook per message| LIS
-    LIS -->|message + media| CLA
-    CLA -->|JSON event| LED
-    LED --> REN
-    REN -->|POST /api/send| GO
-    GO -->|deliver to your 'message yourself' chat| WA
-```
-
-The reliability decision (see [How it works](#how-it-works)): **the LLM only extracts; the code owns the ledger, de-duplication, and rendering.** Every event is one deterministically-keyed record, so a new message updates the existing record instead of producing a duplicate. Two channels read the same ledger — realtime alerts as messages arrive, and a scheduled digest that combines everything into one summary.
-
-### Data flow (one incoming message)
-
-```mermaid
-sequenceDiagram
-    participant WA as WhatsApp
-    participant Bridge as Bridge (Go)
-    participant Listener as Listener (Python)
-    participant Claude as claude -p
-    participant Ledger as Event ledger
-
-    WA->>Bridge: New group message (text / image / PDF)
-    Bridge->>Bridge: Store + auto-download media
-    Bridge->>Listener: Webhook POST
-    Listener->>Listener: ACK 200, then filter to target groups
-    Listener->>Claude: Extract structured event (vision / Read for media)
-    Claude-->>Listener: { relevant, event } JSON
-    Listener->>Ledger: Upsert event (deterministic key)
-    Ledger-->>Listener: new / changed?
-    Listener->>Bridge: POST /api/send (only if new or changed)
-    Bridge->>WA: Deliver to your "message yourself" chat
-```
-
 ## Development
 
 ### Running Tests

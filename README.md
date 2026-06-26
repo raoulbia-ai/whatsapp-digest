@@ -23,13 +23,19 @@ Under the hood the digest layer reads from a WhatsApp [MCP](https://modelcontext
 
 ## Features
 
-- **Message Management**: Search and read personal WhatsApp messages (text, images, videos, documents, audio)
-- **Contact Search**: Search contacts by name or phone number with `sender_display` format ("Name (phone)")
-- **Send Messages**: Send text messages to individuals or groups
-- **Media Support**: Send and download images, videos, documents, and voice messages
-- **Call History**: Capture incoming voice/video calls into a local SQLite table (live, 1:1 and group)
-- **Webhook Integration**: Forward incoming messages to external services
-- **Local Storage**: All messages stored locally in SQLite - only sent to Claude when you allow it
+**The digest — what this fork adds:**
+
+- **Cross-channel digests** — one scheduled summary that merges the key info from all your groups: grouped, deduped, chatter stripped out.
+- **Live-updating summaries** — a changed time / venue / plan revises the existing entry in place (flagged `(updated)`) instead of piling on new pings.
+- **Realtime alerts** — the moment a message that matters lands, a concise note is pushed to your own "message yourself" chat.
+- **Structured extraction** — an LLM reads text, images, and PDF attachments (e.g. team sheets) and returns structured facts; the code owns the ledger, so results stay deterministic.
+- **Self-hosted, no API key required** — runs headless on your own machine via systemd timers + the `claude` CLI; your messages never leave it.
+
+**The bridge underneath (inherited from upstream):**
+
+- Local WhatsApp link via whatsmeow (companion device); all messages stored in local SQLite.
+- Webhook forwarding of incoming messages — text, images, and documents.
+- Headless pairing-code login (`WA_PAIR_PHONE`) for servers with no scannable QR.
 
 ## Installation
 
@@ -434,98 +440,58 @@ CREATE TABLE calls (
 
 ## Architecture
 
+The digest runs as a small always-on pipeline. The bridge links WhatsApp and emits a webhook on every incoming message; a Python layer extracts structured facts with an LLM and writes them to a ledger; digests and alerts render from that ledger and are delivered back through the same bridge into your own "message yourself" chat — so the only delivery surface is WhatsApp itself. Full detail in [docs/realtime-alerter.md](docs/realtime-alerter.md).
+
 ```mermaid
 flowchart TB
-    subgraph Clients["AI Clients"]
-        CD[Claude Desktop]
-        CU[Cursor IDE]
-        CC[Claude Code]
+    WA[WhatsApp servers]
+
+    subgraph Host["Your always-on machine"]
+        subgraph Bridge["WhatsApp bridge (Go, whatsmeow)"]
+            GO[REST API + event loop]
+            DB[(SQLite<br/>messages.db)]
+        end
+
+        subgraph Pipeline["Digest layer (Python + claude CLI)"]
+            LIS[Listener<br/>filter target groups]
+            CLA[claude -p<br/>extracts structured facts]
+            LED[(Event ledger<br/>one record per event)]
+            REN[Render<br/>dedup + digest / alert]
+        end
     end
 
-    subgraph MCP["MCP Layer"]
-        PY[Python MCP Server<br/>FastMCP]
-    end
-
-    subgraph Bridge["WhatsApp Bridge"]
-        GO[Go Bridge<br/>whatsmeow]
-        DB[(SQLite<br/>messages.db)]
-        WH[Webhook Handler]
-    end
-
-    subgraph External["External Services"]
-        WA[WhatsApp Web API]
-        EXT[External Webhook<br/>Receiver]
-    end
-
-    CD & CU & CC -->|MCP Protocol| PY
-    PY -->|REST API| GO
-    PY -->|Read| DB
-    GO -->|Store| DB
-    GO <-->|WebSocket| WA
-    GO -->|Forward Messages| WH
-    WH -->|POST| EXT
+    WA <-->|linked device, websocket| GO
+    GO -->|store| DB
+    GO -->|webhook per message| LIS
+    LIS -->|message + media| CLA
+    CLA -->|JSON event| LED
+    LED --> REN
+    REN -->|POST /api/send| GO
+    GO -->|deliver to your 'message yourself' chat| WA
 ```
 
-### Component Details
+The reliability decision (see [How it works](#how-it-works)): **the LLM only extracts; the code owns the ledger, de-duplication, and rendering.** Every event is one deterministically-keyed record, so a new message updates the existing record instead of producing a duplicate. Two channels read the same ledger — realtime alerts as messages arrive, and a scheduled digest that combines everything into one summary.
 
-```mermaid
-flowchart LR
-    subgraph GoAPI["Go Bridge REST API"]
-        direction TB
-        SEND["/api/send"]
-        DOWN["/api/download"]
-        REACT["/api/react"]
-        TYPE["/api/typing"]
-        HEALTH["/api/health"]
-    end
-
-    subgraph MCPTools["MCP Tools (14 total)"]
-        direction TB
-        CONT["Contact Tools<br/>search_contacts, get_contact"]
-        MSG["Message Tools<br/>list_messages, send_message, etc."]
-        CHAT["Chat Tools<br/>list_chats, get_chat, etc."]
-        MEDIA["Media Tools<br/>send_file, download_media, etc."]
-    end
-
-    MCPTools -->|HTTP Requests| GoAPI
-```
-
-### Data Flow
-
-```mermaid
-sequenceDiagram
-    participant User as User
-    participant Claude as Claude Desktop
-    participant MCP as Python MCP Server
-    participant Bridge as Go Bridge
-    participant WA as WhatsApp
-
-    User->>Claude: "Send 'Hello' to Mom"
-    Claude->>MCP: send_message(recipient, message)
-    MCP->>Bridge: POST /api/send
-    Bridge->>WA: Send via WebSocket
-    WA-->>Bridge: Delivery confirmation
-    Bridge-->>MCP: Success response
-    MCP-->>Claude: Message sent
-    Claude-->>User: "Message sent to Mom"
-```
-
-### Incoming Message Flow
+### Data flow (one incoming message)
 
 ```mermaid
 sequenceDiagram
     participant WA as WhatsApp
-    participant Bridge as Go Bridge
-    participant DB as SQLite
-    participant WH as Webhook
-    participant EXT as External Service
+    participant Bridge as Bridge (Go)
+    participant Listener as Listener (Python)
+    participant Claude as claude -p
+    participant Ledger as Event ledger
 
-    WA->>Bridge: New message
-    Bridge->>DB: Store message
-    Bridge->>Bridge: Auto-download media
-    Bridge->>WH: Forward to webhook
-    WH->>EXT: POST with message data
-    Note over EXT: Process incoming message
+    WA->>Bridge: New group message (text / image / PDF)
+    Bridge->>Bridge: Store + auto-download media
+    Bridge->>Listener: Webhook POST
+    Listener->>Listener: ACK 200, then filter to target groups
+    Listener->>Claude: Extract structured event (vision / Read for media)
+    Claude-->>Listener: { relevant, event } JSON
+    Listener->>Ledger: Upsert event (deterministic key)
+    Ledger-->>Listener: new / changed?
+    Listener->>Bridge: POST /api/send (only if new or changed)
+    Bridge->>WA: Deliver to your "message yourself" chat
 ```
 
 ## Development

@@ -21,13 +21,14 @@ MEDIA_CACHE = os.path.expanduser("~/.local/share/wa-alerts/media")
 # Persisted fields, in render-ish order.
 EVENT_FIELDS = (
     "key", "iso", "date", "type", "emoji", "title",
-    "time", "place", "bib", "team", "notes", "status",
+    "time", "place", "map_url", "bib", "team", "notes", "status",
     "group", "updated_at",
 )
 
 # Fields whose change is "material" — i.e. worth a realtime (updated) alert. Notes/title are
-# updated silently (phrasing drifts), so they don't on their own trigger a re-alert.
-TRIGGER_FIELDS = ("iso", "date", "time", "place", "bib", "team", "status")
+# updated silently (phrasing drifts), so they don't on their own trigger a re-alert. A venue
+# location pin (map_url) appearing or changing is material — it's a "where" change.
+TRIGGER_FIELDS = ("iso", "date", "time", "place", "map_url", "bib", "team", "status")
 
 STATUS_EMOJI = {"cancelled": "🚫", "postponed": "⏸️"}
 
@@ -143,6 +144,8 @@ def event_lines(ev, updated=False, with_title=True):
             lines.append(f"🕒 {ev['time']}")
         if ev.get("place"):
             lines.append(f"📍 {ev['place']}")
+        if ev.get("map_url"):
+            lines.append(f"🗺️ {ev['map_url']}")
         if ev.get("bib"):
             lines.append(f"🎽 {ev['bib']}")
     if ev.get("team"):

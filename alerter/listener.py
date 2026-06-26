@@ -63,6 +63,9 @@ You are given the parent's CURRENT KNOWN EVENTS for {who} (the ledger). Use it t
 
 Set status="cancelled" when the message cancels/calls off the event (keep its date + team so it
 is recorded — "no game" is worth knowing). Use status="postponed" for postponements.
+If the message includes a Google Maps / location link for the venue (e.g. maps.app.goo.gl/…,
+goo.gl/maps/…, maps.google.com/…, or a "https://maps…?q=…" pin), copy that URL EXACTLY into
+map_url — do not shorten, paraphrase, or invent one; use "" when no link is present.
 
 CURRENT KNOWN EVENTS for {who}:
 {ledger}
@@ -80,6 +83,7 @@ Respond with ONLY this JSON object and nothing else:
     "title": "<short event title, e.g. 'League match away v Knockmitten'>",
     "time": "<e.g. 10:30am (arrive 10:00am), or empty>",
     "place": "<venue + pitch/hall, or empty>",
+    "map_url": "<Google Maps / location link for the venue copied verbatim, or empty>",
     "bib": "<bib/strip colour for {who}, or empty>",
     "team": "<team/squad name, or empty>",
     "notes": "<parent-actionable essentials in ONE short line: bring/meet/carpool/cancellation reason; NO date-reasoning meta, or empty>",

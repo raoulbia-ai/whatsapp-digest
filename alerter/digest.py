@@ -173,6 +173,9 @@ Read any "[IMAGE attached: <path>]" / "[DOCUMENT attached: <path>]" files and th
 to find {kid}'s bib/team colour — use "" (not a guess) if unclear.
 Set status="cancelled" for cancelled/called-off events and KEEP them (the parent wants to know
 nothing is on); use "postponed" for postponements.
+If a message includes a Google Maps / location link for the venue (e.g. maps.app.goo.gl/…,
+goo.gl/maps/…, maps.google.com/…, or a "https://maps…?q=…" pin), copy that URL EXACTLY into
+map_url — do not shorten, paraphrase, or invent one; use "" when no link is present.
 Ignore banter, results, availability chatter (who's in/out), and photos with no logistics.
 NEVER invent a time or venue a message doesn't state.{extra_ignore}
 
@@ -191,8 +194,8 @@ re-output any event you can't find in the TRANSCRIPT below):
 Output ONLY a JSON array — no analysis, no prose, no markdown fences, nothing before or after it.
 Each element exactly:
 {{"iso":"YYYY-MM-DD","date":"Sat 14 Jun","type":"training|match|blitz|tournament|other",
-  "emoji":"⚽|🏑|🏆","title":"short title","time":"","place":"","bib":"","team":"","notes":"",
-  "status":"scheduled|cancelled|postponed"}}
+  "emoji":"⚽|🏑|🏆","title":"short title","time":"","place":"","map_url":"","bib":"","team":"",
+  "notes":"","status":"scheduled|cancelled|postponed"}}
 Use "" for any unknown field. Return [] if nothing falls in range.
 
 TRANSCRIPT:

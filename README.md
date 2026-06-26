@@ -189,9 +189,6 @@ go run .
 - **Bridge returns 403 Forbidden for Host**: Use `WHATSAPP_API_URL` with
   `http://127.0.0.1:<port>/api`, `http://localhost:<port>/api`, or
   `http://[::1]:<port>/api`; custom hostnames and missing ports are rejected.
-- **Bridge returns 403 Forbidden for media_path**: Move the file into
-  `~/.local/share/whatsapp-mcp/outbox` or add its absolute parent directory to
-  `WHATSAPP_MEDIA_ROOTS`.
 
 ### App State / LTHash Conflicts
 

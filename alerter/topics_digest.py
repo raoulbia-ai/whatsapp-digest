@@ -21,10 +21,11 @@ import json
 import os
 import re
 import sqlite3
-import subprocess
 import urllib.request
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
+import wa_events  # shared helpers (run_claude: fail loudly when the CLI is broken)
 
 CFG = json.load(open(os.path.expanduser("~/.config/wa-alerts/config.json")))
 TD = CFG.get("topic_digest", {})
@@ -200,16 +201,18 @@ MESSAGES:
 
 def extract_chunk(channel, body, timeout):
     prompt = EXTRACT_PROMPT.format(channel=channel, body=body)
-    proc = subprocess.run(
-        ["claude", "-p", prompt], capture_output=True, text=True, timeout=timeout, cwd="/tmp"
-    )
-    raw = (proc.stdout or "").strip()
+    # Raises ClaudeCLIError if the CLI itself failed — never silently "no items found".
+    raw = wa_events.run_claude(["claude", "-p", prompt], timeout)
     m = re.search(r"\[\s*\{.*\}\s*\]", raw, re.S)
     if not m:
+        # A well-formed "nothing worth keeping" answer is a bare [] — anything else is suspect.
+        if raw.strip() != "[]":
+            print(f"[{channel}] unparseable model output: {raw[:160]!r}", flush=True)
         return []
     try:
         arr = json.loads(m.group(0))
     except Exception:
+        print(f"[{channel}] bad JSON: {m.group(0)[:160]!r}", flush=True)
         return []
     items = []
     for it in arr if isinstance(arr, list) else []:
@@ -333,5 +336,24 @@ def main():
     print(f"Sent {len(fresh)} new items in {len(parts)} message(s).", flush=True)
 
 
+def _alert_broken(exc):
+    """Tell the user on WhatsApp that the run failed — a silent digest looks like a quiet week."""
+    msg = ("\u26a0\ufe0f wa-topics-digest could not run.\n\n"
+           f"{exc}\n\n"
+           "The Claude CLI login has most likely expired. On the VM run:\n"
+           "  claude login\n"
+           "then: systemctl --user start wa-topics-digest.service")
+    try:
+        send_self(msg)
+        print("sent failure alert to self", flush=True)
+    except Exception as send_exc:  # bridge down too — nothing left but the journal
+        print(f"FAILED to send failure alert: {send_exc}", flush=True)
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except wa_events.ClaudeCLIError as exc:
+        print(f"claude CLI unusable: {exc}", flush=True)
+        _alert_broken(exc)
+        raise SystemExit(1)

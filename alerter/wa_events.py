@@ -13,6 +13,7 @@ being self-consistent across calls.
 import json
 import os
 import re
+import subprocess
 import tempfile
 
 STATE_DIR = os.path.expanduser("~/.local/share/wa-alerts/state")
@@ -170,3 +171,38 @@ def ledger_summary(events):
         detail = " / ".join(filter(None, [e.get("time"), e.get("place"), e.get("bib"), e.get("notes")]))
         out.append(f"- {head}" + (f" — {detail}" if detail else ""))
     return "\n".join(out)
+
+
+# ---- Claude CLI ------------------------------------------------------------------------------
+#
+# Both digests shell out to `claude -p`. A broken CLI (expired credential, missing binary, crash)
+# exits fast with empty stdout, which is indistinguishable from "the model found nothing" unless
+# we look. Silently treating that as an empty result once cost three weeks of missed digests, so
+# run_claude() RAISES on a failed invocation and the callers turn that into a visible alert.
+
+class ClaudeCLIError(RuntimeError):
+    """`claude -p` did not produce usable output (auth, crash, timeout, empty response)."""
+
+
+def run_claude(cmd, timeout, cwd="/tmp"):
+    """Run a `claude -p` command and return stdout. Raises ClaudeCLIError on any failure."""
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd)
+    except FileNotFoundError:
+        raise ClaudeCLIError("claude CLI not found on PATH")
+    except subprocess.TimeoutExpired:
+        raise ClaudeCLIError(f"claude CLI timed out after {timeout}s")
+    out = (proc.stdout or "").strip()
+    err = (proc.stderr or "").strip()
+    if proc.returncode != 0:
+        raise ClaudeCLIError(f"claude CLI exited {proc.returncode}: {(err or out)[:300]}")
+    if not out:
+        raise ClaudeCLIError(f"claude CLI returned empty output: {err[:300]}")
+    # An expired login exits 0 on some versions and prints a login prompt instead of an answer.
+    low = out.lower()
+    if len(out) < 400 and any(p in low for p in (
+        "/login", "please log in", "invalid api key", "authentication_error",
+        "oauth token has expired", "credit balance is too low",
+    )):
+        raise ClaudeCLIError(f"claude CLI not authenticated: {out[:200]}")
+    return out

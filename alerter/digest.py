@@ -15,7 +15,6 @@ import json
 import os
 import re
 import sqlite3
-import subprocess
 import sys
 import urllib.request
 from datetime import datetime, timedelta
@@ -218,12 +217,14 @@ def reconcile_group(kid, group, body, sheets, ledger, today, start, end, extra_i
     cmd = ["claude", "-p", prompt]
     if attachments:
         cmd += ["--allowedTools", "Read"]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=480, cwd="/tmp")
-    raw = (proc.stdout or "").strip()
+    # Raises ClaudeCLIError if the CLI itself failed — never silently "no events found".
+    raw = wa_events.run_claude(cmd, 480)
     # Match an array OF OBJECTS specifically, so an echoed "[document - unavailable]" in the
-    # transcript can't be mistaken for the result. Empty/parse-miss both yield [] (== no events).
+    # transcript can't be mistaken for the result. A parse miss yields [] (== no events).
     m = re.search(r"\[\s*\{.*\}\s*\]", raw, re.S)
     if not m:
+        if raw.strip() != "[]":
+            print(f"[{kid}/{group}] unparseable model output: {raw[:160]!r}", flush=True)
         return []
     try:
         arr = json.loads(m.group(0))
@@ -305,9 +306,30 @@ def main():
             send_self(f"📅 This week — {kid} (through Sun {end_date.strftime('%d %b')})\n\n{out}")
             save_prev(kid, out)
             print(f"[{kid}] sent ({len(ledger)} events in ledger)", flush=True)
+        except wa_events.ClaudeCLIError:
+            raise  # a broken CLI affects every kid — fail the run loudly, don't paper over it
         except Exception as exc:
             print(f"[{kid}] error: {exc!r}", flush=True)
 
 
+def _alert_broken(exc):
+    """Tell the user on WhatsApp that the run failed — a silent digest looks like a quiet week."""
+    msg = ("\u26a0\ufe0f wa-digest could not run.\n\n"
+           f"{exc}\n\n"
+           "The Claude CLI login has most likely expired. On the VM run:\n"
+           "  claude login\n"
+           "then: systemctl --user start wa-digest.service")
+    try:
+        send_self(msg)
+        print("sent failure alert to self", flush=True)
+    except Exception as send_exc:  # bridge down too — nothing left but the journal
+        print(f"FAILED to send failure alert: {send_exc}", flush=True)
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except wa_events.ClaudeCLIError as exc:
+        print(f"claude CLI unusable: {exc}", flush=True)
+        _alert_broken(exc)
+        raise SystemExit(1)

@@ -48,7 +48,13 @@ def kid_lock(key):
 # decision (by diffing against the ledger). The model never formats the alert.
 INSTRUCTIONS = """You are a parent's assistant watching the WhatsApp group "{group}" for {who}.
 From the LATEST message, identify the ONE training session or match it concerns and return it as
-a structured event. Today / now is {now} (Europe/Dublin) — resolve relative dates ("tonight",
+a structured event.
+
+If the message lists SEVERAL events (a week's fixtures, "also training Thursday", two matches on
+one day), return ONLY the SOONEST one that has not yet happened, and describe ONLY that event.
+Do NOT summarise the other events in "notes" — the twice-daily digest reads the same messages and
+covers the whole week, so anything you leave out still reaches the parent. The alert answers
+"what is next", not "what is on this week". Today / now is {now} (Europe/Dublin) — resolve relative dates ("tonight",
 "this evening", "today", "tomorrow", a bare weekday) to an absolute date against THIS moment.
 If a message's weekday and date-number disagree (e.g. "Saturday 12th" when the 12th is a Friday),
 trust the WEEKDAY.

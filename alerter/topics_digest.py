@@ -35,6 +35,9 @@ DB = os.environ.get("WA_MESSAGES_DB") or CFG.get("messages_db") or os.path.expan
 TZ = ZoneInfo("Europe/Dublin")
 STATE_DIR = os.path.expanduser("~/.local/share/wa-alerts/state")
 SEEN_PATH = os.path.join(STATE_DIR, TD.get("seen_file", "topics_seen.json"))
+# Running markdown archive of every digest sent, newest appended at the end. Lives in the state
+# dir so the config backup versions it alongside the dedup ledger.
+ARCHIVE_PATH = os.path.join(STATE_DIR, TD.get("archive_file", "topics_digest.md"))
 
 # How big each transcript chunk handed to the model may get (chars / messages). Keeping chunks
 # focused makes the model both faster and less likely to drop items in a long scroll-back.
@@ -90,6 +93,19 @@ def norm_url(url):
     return u.rstrip("/").lower()
 
 
+# Words that carry no distinguishing weight when comparing two headlines.
+_STOP = {
+    "a", "an", "the", "and", "or", "of", "for", "to", "in", "on", "with", "is", "are", "be",
+    "new", "now", "its", "it", "you", "your", "this", "that", "from", "at", "by", "as", "ai",
+}
+
+
+def title_terms(title):
+    """Significant lowercase words in a headline, for near-duplicate comparison."""
+    words = re.findall(r"[a-z0-9.]+", (title or "").lower())
+    return {w for w in words if w not in _STOP and len(w) > 2}
+
+
 def item_key(item):
     """Stable dedup key: normalised URL if present, else a slug of the title."""
     url = (item.get("url") or "").strip()
@@ -97,6 +113,27 @@ def item_key(item):
         return "u:" + norm_url(url)
     slug = re.sub(r"[^a-z0-9]+", "-", (item.get("title") or "").lower()).strip("-")
     return "t:" + slug[:60]
+
+
+def is_near_duplicate(item, kept):
+    """True if `item` restates something already in `kept`.
+
+    item_key() catches identical URLs and identical titles, but the same story surfacing in two
+    channels — or in two chunks of one channel — arrives with different wording and sometimes a
+    different link, so within a digest it slipped through as two bullets. Compare the significant
+    words of the headlines: a large overlap means the same story.
+    """
+    terms = title_terms(item.get("title"))
+    if not terms:
+        return False
+    for other in kept:
+        seen_terms = title_terms(other.get("title"))
+        if not seen_terms:
+            continue
+        overlap = len(terms & seen_terms) / min(len(terms), len(seen_terms))
+        if overlap >= 0.7:
+            return True
+    return False
 
 
 def load_seen():
@@ -179,17 +216,34 @@ Extract ONLY items a busy AI engineer would be glad to have saved a week later:
 - EVENTS: meetups, webinars, masterclasses, talks (with date if stated)    -> category "event"
 
 AGGRESSIVELY DROP noise: greetings, thanks, reactions, one-liners, "anyone tried X?" with no
-answer, logistics, banter, opinions with no takeaway, job/self-promo spam, and anything not about
+answer, logistics, banter, opinions with no takeaway, recruitment/job ads, and anything not about
 AI / software / engineering. When several messages discuss the SAME thing, MERGE them into ONE
 item. Prefer items with a concrete artifact (link, repo, model, technique). If a message only
 reacts to a link without adding info, fold it into that link's item. When in doubt, leave it out —
 a short high-signal digest beats a long noisy one.
 
+KEEP work people share about what they BUILT, even when they are promoting it and ask for likes,
+feedback or upvotes — a demo, repo, model, writeup or project with a link is exactly the signal
+this digest exists for. Only treat self-promotion as noise when there is no substance behind it
+(no artifact, no link, nothing to look at). Judge the artifact, not the tone of the ask.
+
+URLS: include one whenever the chat contains one for that item. Copy it VERBATIM from the
+messages — never invent, complete, shorten or guess a URL, and never substitute a homepage for a
+link you do not have. Prefer the primary external source (repo, paper, model card, docs, article)
+over an aggregator or a link to another chat message. Shortened links (lnkd.in, t.co, bit.ly) are
+fine as-is. Only use "" when the messages genuinely contain no link for that item.
+
+BE CONCISE — every word must earn its place. "summary" is ONE sentence, max ~200 characters.
+Cut throat-clearing openers ("A user reports that", "Members discussed", "This is a useful"),
+hedging, and any restatement of the title. Lead with the fact itself: what it is, what is new or
+what the takeaway is. Keep concrete specifics — numbers, model names, benchmarks, versions,
+prices, dates — those ARE the information; drop only filler.
+
 For each kept item output:
 - "category": one of release|tool|guide|article|insight|event
-- "title": a concise, self-contained headline (NOT "someone shared a link")
-- "summary": 1-2 sentences on what it is and why it matters, understandable without the chat
-- "url": the primary link if the messages contain one, else ""
+- "title": a concise, self-contained headline, max ~80 chars (NOT "someone shared a link")
+- "summary": ONE sentence, max ~200 chars, understandable without the chat, no filler openers
+- "url": the primary link copied verbatim from the messages, else ""
 
 Output ONLY a JSON array, nothing before or after it (no prose, no markdown fences). Each element:
 {{"category":"...","title":"...","summary":"...","url":""}}
@@ -264,6 +318,46 @@ def render(items, start_date, end_date):
     return header + "\n\n" + "\n\n".join(blocks)
 
 
+def render_markdown(items, start_date, end_date):
+    """The same digest as markdown — real headings and [title](url) links, not WhatsApp *bold*."""
+    by_cat = {}
+    for it in items:
+        by_cat.setdefault(it["category"], []).append(it)
+    out = [
+        f"## {start_date.strftime('%d %b %Y')} → {end_date.strftime('%d %b %Y')}",
+        "",
+        f"_{len(items)} item{'s' if len(items) != 1 else ''}_",
+        "",
+    ]
+    for key, emoji, heading in CATEGORIES:
+        group = by_cat.get(key)
+        if not group:
+            continue
+        out.append(f"### {emoji} {heading}")
+        out.append("")
+        for it in group:
+            title = it["title"].replace("[", "(").replace("]", ")")
+            head = f"[{title}]({it['url']})" if it.get("url") else title
+            line = f"- **{head}**"
+            if it.get("summary"):
+                line += f" — {it['summary']}"
+            line += f" _({it['channel']})_"
+            out.append(line)
+        out.append("")
+    return "\n".join(out).rstrip() + "\n"
+
+
+def append_archive(md):
+    """Append this digest to the running markdown file, creating it with a title if new."""
+    os.makedirs(STATE_DIR, exist_ok=True)
+    new = not os.path.exists(ARCHIVE_PATH)
+    with open(ARCHIVE_PATH, "a", encoding="utf-8") as fh:
+        if new:
+            fh.write("# AI digest archive\n\nCurated weekly from the community channels.\n\n")
+        fh.write(md + "\n")
+    return ARCHIVE_PATH
+
+
 def split_for_whatsapp(text, limit=3500):
     """Split a long digest on blank-line boundaries so each WhatsApp message stays readable."""
     if len(text) <= limit:
@@ -311,6 +405,10 @@ def main():
                 k = item_key(it)
                 if k in seen:
                     continue
+                # Same story, different wording/link — across chunks or across channels.
+                if is_near_duplicate(it, fresh):
+                    print(f"  dropped near-duplicate: {it['title'][:70]}", flush=True)
+                    continue
                 seen[k] = end_date.isoformat()  # mark within-run too, so chunks don't dupe
                 fresh.append(it)
             print(f"  chunk {i + 1}/{len(batches)}: +{len(items)} extracted", flush=True)
@@ -323,14 +421,20 @@ def main():
                  datetime.combine(end_date, datetime.min.time()))
     parts = split_for_whatsapp(out)
 
+    md = render_markdown(fresh, datetime.combine(start_date, datetime.min.time()),
+                         datetime.combine(end_date, datetime.min.time()))
+
     if args.dry_run:
         print("\n========== DIGEST (NOT sent) ==========\n")
         print(out)
+        print("\n========== MARKDOWN (NOT archived) ==========\n")
+        print(md)
         print(f"\n[{len(fresh)} new items, {len(parts)} WhatsApp message(s)]")
         return
 
     for p in parts:
         send_self(p)
+    print(f"archived to {append_archive(md)}", flush=True)
     ttl = (end_date - timedelta(days=int(TD.get("seen_ttl_days", 120)))).isoformat()
     save_seen(prune_seen(seen, ttl))
     print(f"Sent {len(fresh)} new items in {len(parts)} message(s).", flush=True)

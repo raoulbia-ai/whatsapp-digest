@@ -51,14 +51,23 @@ def _slug(s):
     return re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-")[:24] or "x"
 
 
-def event_key(iso, group):
-    """Stable key — code computes it from group (always known) + iso, never the model.
+def chat_slug(jid):
+    """Short stable identifier for a chat, derived from the JID's numeric id."""
+    return (jid or "").split("@")[0].split("-")[0][-10:] or "x"
+
+
+def event_key(iso, group, jid=""):
+    """Stable key — code computes it from the chat + iso, never the model.
+
+    Keyed on the chat JID when known, NOT the group name: WhatsApp group subjects get renamed
+    every season ("U12" -> "U13"), and a name-derived key would orphan every existing record on
+    the rename, re-alerting known events as new. Falls back to the name slug for old records.
 
     Deliberately NOT keyed on event type: one slot per group per day, so a match the model
     later re-labels "game"/"blitz" updates the same record instead of spawning a duplicate.
     A group rarely has two distinct events on one day; if it does, they merge (better than dupes).
     """
-    return f"{iso or 'nodate'}|{_slug(group)}"
+    return f"{iso or 'nodate'}|{chat_slug(jid) if jid else _slug(group)}"
 
 
 def ledger_path(kid):
@@ -88,7 +97,7 @@ def save_ledger(kid, events):
             os.remove(tmp)
 
 
-def normalize_event(raw, group="", updated_at=""):
+def normalize_event(raw, group="", updated_at="", jid=""):
     """Coerce a model-emitted event dict into a ledger record; CODE assigns group + key."""
     out = {k: (raw.get(k) or "") for k in EVENT_FIELDS}
     out["group"] = group or raw.get("group") or ""
@@ -99,7 +108,7 @@ def normalize_event(raw, group="", updated_at=""):
     # an emoji can't relabel a GAA fixture with a soccer ball.
     out["emoji"] = sport_emoji(out["sport"], raw.get("emoji") or "")
     out["updated_at"] = updated_at
-    out["key"] = event_key(out["iso"], out["group"])
+    out["key"] = event_key(out["iso"], out["group"], jid)
     return out
 
 

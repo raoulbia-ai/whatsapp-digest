@@ -295,7 +295,7 @@ def process(payload):
                 return
 
             now_str = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
-            ev = wa_events.normalize_event(event, group=group, updated_at=now_str)
+            ev = wa_events.normalize_event(event, group=group, updated_at=now_str, jid=chat)
             change, merged, deltas = wa_events.upsert(ledger, ev)
             if change == "unchanged":
                 print(f"[skip:dup] {chat} ({kid}): {merged.get('key')}", flush=True)

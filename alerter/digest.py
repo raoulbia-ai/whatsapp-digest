@@ -309,7 +309,7 @@ def main():
                     group_ignore(jid), attachments, chat_sports(jid),
                 )
                 for raw in events:
-                    ev = wa_events.normalize_event(raw, group=group, updated_at=now.isoformat())
+                    ev = wa_events.normalize_event(raw, group=group, updated_at=now.isoformat(), jid=jid)
                     if ev.get("iso"):
                         wa_events.upsert(ledger, ev)
             wa_events.save_ledger(kid, ledger)

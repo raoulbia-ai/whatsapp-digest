@@ -91,7 +91,7 @@ Respond with ONLY this JSON object and nothing else:
     "map_url": "<Google Maps / location link for the venue copied verbatim, or empty>",
     "bib": "<bib/strip colour for {who}, or empty>",
     "team": "<team/squad name, or empty>",
-    "notes": "<parent-actionable essentials in ONE short line: bring/meet/carpool/cancellation reason; NO date-reasoning meta, or empty>",
+    "notes": "<parent-actionable essentials ONLY, one short clause, max ~90 chars: bring/meet/carpool/cancellation reason. EXCLUDE club admin that is not about getting {who} to THIS event: subs/membership payments, registration portals, requests to react/RSVP in an app or group, fundraising, kit hand-ins, AGMs, volunteer rotas, prices for optional extras. NO date-reasoning meta. Use \"\" if nothing is essential>",
     "status": "<scheduled|cancelled|postponed>"
   }}
 }}

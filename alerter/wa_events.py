@@ -144,6 +144,13 @@ def prune_ledger(events, before_iso):
     return [e for e in events if not e.get("iso") or e.get("iso") >= before_iso]
 
 
+def _same_team(team, group):
+    """True if the team label adds nothing over the group name (one contains the other's words)."""
+    a, b = set(re.findall(r"[a-z0-9]+", (team or "").lower())), set(
+        re.findall(r"[a-z0-9]+", (group or "").lower()))
+    return bool(a) and bool(b) and (a <= b or b <= a)
+
+
 def event_lines(ev, updated=False, with_title=True, deltas=None, brief=False):
     """Render one event to display lines, shared by both channels so they read identically.
 
@@ -192,8 +199,11 @@ def event_lines(ev, updated=False, with_title=True, deltas=None, brief=False):
             lines.append(f"🗺️ {ev['map_url']}")
         if ev.get("bib"):
             lines.append(f"🎽 {ev['bib']}")
-    if ev.get("team") and not brief:
-        lines.append(f"👥 {ev['team']}")
+    # Suppress the team line when it just restates the group already in the header/day block —
+    # "Clontarf GAA - Boys 2016" followed by "👥 Boys 2016" is a wasted line in every alert.
+    team = (ev.get("team") or "").strip()
+    if team and not brief and not _same_team(team, ev.get("group")):
+        lines.append(f"👥 {team}")
     if ev.get("notes"):
         lines.append(f"📝 {ev['notes']}")
     return lines

@@ -17,7 +17,8 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.28.1",
-    "mcp[cli]>=1.28.1",
+    # mcp 2.x renamed FastMCP -> MCPServer and changed other APIs; main.py still targets v1.
+    "mcp[cli]>=1.28.1,<2",
     "requests>=2.34.2",
     "anyio<4.15",
 ]

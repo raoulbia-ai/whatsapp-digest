@@ -183,8 +183,13 @@ IMPORTANT:
   merge all of its details (squad, meet time, jerseys, etc.) into that one event.
 - At most ONE event per calendar day for THIS group (combine same-day items).
 - Include ONLY events for THIS group's own team; ignore other teams' fixtures mentioned in passing.
-- "notes" = parent-actionable essentials only (bring/meet/carpool, cancellation reason). NEVER
-  explain your date reasoning or mention which message said what.
+- "notes" = parent-actionable essentials only (bring/meet/carpool, cancellation reason), ONE
+  short clause, max ~90 characters. NEVER explain your date reasoning or mention which message
+  said what. EXCLUDE club admin that is not about getting the child to this event: subscription
+  or membership payments, registration portals, requests to respond/RSVP in an app, fundraising,
+  jersey/kit hand-ins, AGMs, volunteer rotas. If nothing is essential, use "".
+- "sport" = this group plays {sport_hint}. Never say "football" unqualified — it means gaelic
+  football in a GAA group and soccer in a soccer club. Use soccer|gaa-football|hurling.
 
 ALREADY-KNOWN events for {kid} in THIS group (use only to FILL missing detail — do NOT
 re-output any event you can't find in the TRANSCRIPT below):
@@ -193,7 +198,7 @@ re-output any event you can't find in the TRANSCRIPT below):
 Output ONLY a JSON array — no analysis, no prose, no markdown fences, nothing before or after it.
 Each element exactly:
 {{"iso":"YYYY-MM-DD","date":"Sat 14 Jun","type":"training|match|blitz|tournament|other",
-  "emoji":"⚽|🏑|🏆","title":"short title","time":"","place":"","map_url":"","bib":"","team":"",
+  "sport":"{sports}","title":"short title","time":"","place":"","map_url":"","bib":"","team":"",
   "notes":"","status":"scheduled|cancelled|postponed"}}
 Use "" for any unknown field. Return [] if nothing falls in range.
 
@@ -208,11 +213,25 @@ def send_self(text):
     bridge_post("/send", {"recipient": CFG["self_jid"], "message": text}, timeout=20)
 
 
-def reconcile_group(kid, group, body, sheets, ledger, today, start, end, extra_ignore, attachments):
+def chat_sports(jid):
+    """Sport codes this chat can produce, from config.chat_sports — keyed by JID because group
+    subjects get renamed each season and a name-keyed mapping would silently go stale."""
+    sports = (CFG.get("chat_sports") or {}).get(jid) or list(wa_events.SPORT_EMOJI)
+    return [sports] if isinstance(sports, str) else sports
+
+
+def reconcile_group(kid, group, body, sheets, ledger, today, start, end, extra_ignore,
+                    attachments, sports=None):
     """Ask the model for the structured events in one group's transcript; return a list of dicts."""
+    sports = sports or list(wa_events.SPORT_EMOJI)
+    hint = (
+        wa_events.SPORT_LABEL.get(sports[0], sports[0]) if len(sports) == 1
+        else " and ".join(wa_events.SPORT_LABEL.get(x, x) for x in sports)
+    )
     prompt = RECONCILE_PROMPT.format(
         kid=kid, group=group, today=today, start=start, end=end, body=body, sheets=sheets,
         ledger=wa_events.ledger_summary(ledger), extra_ignore=extra_ignore,
+        sports="|".join(sports), sport_hint=hint,
     )
     cmd = ["claude", "-p", prompt]
     if attachments:
@@ -249,7 +268,7 @@ def render_week(ledger, start_iso, end_iso):
                                                x.get("time") or "~", x.get("title") or ""))
         for e in evs:
             lines.append("")
-            lines += wa_events.event_lines(e, with_title=True)
+            lines += wa_events.event_lines(e, with_title=True, brief=True)
         timed = [e for e in days[iso] if e.get("status") != "cancelled" and e.get("time")]
         if len(timed) >= 2:
             clash = " vs ".join(f"{e.get('title', 'event')} ({e['time']})" for e in timed)
@@ -287,7 +306,7 @@ def main():
                 own = [e for e in ledger if e.get("group") == group]
                 events = reconcile_group(
                     kid, group, body, sheets, own, today, start_iso, end_iso,
-                    group_ignore(jid), attachments,
+                    group_ignore(jid), attachments, chat_sports(jid),
                 )
                 for raw in events:
                     ev = wa_events.normalize_event(raw, group=group, updated_at=now.isoformat())

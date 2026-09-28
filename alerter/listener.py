@@ -73,13 +73,18 @@ CURRENT KNOWN EVENTS for {who}:
 Message sender: {sender}
 Caption / text: \"\"\"{content}\"\"\"
 
+SPORT: this group plays {sport_hint}. Never use the word "football" on its own — in an Irish
+club it means gaelic football in a GAA group and soccer in a soccer club. Use "soccer" for
+association football, "gaa-football" for gaelic football, "hurling" for hurling. If this group
+plays a single code, always emit that code.
+
 Respond with ONLY this JSON object and nothing else:
 {{"relevant": <true|false>,
   "event": {{
     "iso": "<YYYY-MM-DD>",
     "date": "<e.g. Sun 14 Jun>",
     "type": "<training|match|blitz|tournament|other>",
-    "emoji": "<⚽ football | 🏑 hurling | 🏆 match/blitz/tournament>",
+    "sport": "<{sports}>",
     "title": "<short event title, e.g. 'League match away v Knockmitten'>",
     "time": "<e.g. 10:30am (arrive 10:00am), or empty>",
     "place": "<venue + pitch/hall, or empty>",
@@ -200,10 +205,20 @@ def claude_extract(content, sender, chat, cfg, media_path=None, ledger=None):
         else ""
     )
     now = datetime.now(TZ).strftime("%A %d %b %Y, %H:%M")
+    # Keyed by JID, not by name: WhatsApp group subjects get renamed every season and the
+    # bridge caches the old one, so a name-keyed mapping silently goes stale.
+    sports = (cfg.get("chat_sports") or {}).get(chat) or list(wa_events.SPORT_EMOJI)
+    if isinstance(sports, str):
+        sports = [sports]
+    sport_hint = (
+        wa_events.SPORT_LABEL.get(sports[0], sports[0]) if len(sports) == 1
+        else " and ".join(wa_events.SPORT_LABEL.get(x, x) for x in sports)
+    )
     prompt = INSTRUCTIONS.format(
         group=group, who=who, sender=sender, content=content or "(none)",
         media_note=media_note, now=now, extra_ignore=extra_ignore,
         ledger=wa_events.ledger_summary(ledger or []),
+        sports="|".join(sports), sport_hint=sport_hint,
     )
     cmd = ["claude", "-p", prompt]
     if media_path:
@@ -281,7 +296,7 @@ def process(payload):
 
             now_str = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
             ev = wa_events.normalize_event(event, group=group, updated_at=now_str)
-            change, merged = wa_events.upsert(ledger, ev)
+            change, merged, deltas = wa_events.upsert(ledger, ev)
             if change == "unchanged":
                 print(f"[skip:dup] {chat} ({kid}): {merged.get('key')}", flush=True)
                 return
@@ -291,7 +306,9 @@ def process(payload):
             bits = [b for b in (kid, group) if b]
             header = f"{prefix} {' · '.join(bits)}".strip()
             alert = "\n".join(
-                wa_events.event_lines(merged, updated=(change == "changed"), with_title=False)
+                wa_events.event_lines(
+                    merged, updated=(change == "changed"), with_title=False, deltas=deltas
+                )
             )
             send_self(f"{header}\n{alert}", cfg)
             print(f"[alert:{change}] {chat} ({kid}): {merged.get('key')}", flush=True)

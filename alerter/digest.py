@@ -191,6 +191,14 @@ IMPORTANT:
 - "sport" = this group plays {sport_hint}. Never say "football" unqualified — it means gaelic
   football in a GAA group and soccer in a soccer club. Use soccer|gaa-football|hurling.
 
+When ONE day has SEVERAL fixtures for different squads/divisions/teams (e.g. "Div 1 2pm
+Ballyboden, Div 7 1:30pm pitch 21, Div 10 11am Dartry Park"), do NOT pick one squad's time and
+venue for the top-level fields and describe the rest in notes. Leave "time" and "place" EMPTY and
+put each fixture in "parts": [{{"label":"Div 1","time":"2:00pm","place":"Ballyboden","status":""}}].
+Use "parts" ONLY for that case — a single fixture keeps its time/place at the top level and an
+empty parts list. Set a part's "status" to "cancelled"/"postponed" when only that one is off, and
+use "" for a time or venue that is genuinely not stated yet.
+
 ALREADY-KNOWN events for {kid} in THIS group (use only to FILL missing detail — do NOT
 re-output any event you can't find in the TRANSCRIPT below):
 {ledger}
@@ -199,7 +207,8 @@ Output ONLY a JSON array — no analysis, no prose, no markdown fences, nothing 
 Each element exactly:
 {{"iso":"YYYY-MM-DD","date":"Sat 14 Jun","type":"training|match|blitz|tournament|other",
   "sport":"{sports}","title":"short title","time":"","place":"","map_url":"","bib":"","team":"",
-  "notes":"","status":"scheduled|cancelled|postponed"}}
+  "notes":"","status":"scheduled|cancelled|postponed",
+  "parts":[{{"label":"Div 1","time":"2:00pm","place":"Ballyboden","status":""}}]}}
 Use "" for any unknown field. Return [] if nothing falls in range.
 
 TRANSCRIPT:

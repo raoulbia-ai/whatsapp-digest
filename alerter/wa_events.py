@@ -23,8 +23,14 @@ MEDIA_CACHE = os.path.expanduser("~/.local/share/wa-alerts/media")
 EVENT_FIELDS = (
     "key", "iso", "date", "type", "sport", "emoji", "title",
     "time", "place", "map_url", "bib", "team", "notes", "status",
-    "group", "updated_at",
+    "parts", "group", "updated_at",
 )
+
+# One record per group per day (see event_key), so a day carrying several fixtures for different
+# squads — "Div 1 at 2pm in Ballyboden, Div 7 at 1:30pm on pitch 21" — used to keep one squad's
+# time/venue at the top and push the others into notes as prose. `parts` holds them as structured
+# sub-entries instead: [{"label","time","place","status"}], rendered one bullet each.
+PART_FIELDS = ("label", "time", "place", "status")
 
 # Sport is decided by the CHAT (config.chat_sports), not guessed by the model — each group is a
 # single club code. GAA groups run both codes, so there the message text picks football/hurling.
@@ -97,9 +103,22 @@ def save_ledger(kid, events):
             os.remove(tmp)
 
 
+def normalize_parts(raw_parts):
+    """Coerce the model's sub-fixture list into clean records; drop anything unlabelled."""
+    parts = []
+    for p in raw_parts if isinstance(raw_parts, list) else []:
+        if not isinstance(p, dict):
+            continue
+        rec = {k: str(p.get(k) or "").strip() for k in PART_FIELDS}
+        if rec["label"]:
+            parts.append(rec)
+    return parts
+
+
 def normalize_event(raw, group="", updated_at="", jid=""):
     """Coerce a model-emitted event dict into a ledger record; CODE assigns group + key."""
     out = {k: (raw.get(k) or "") for k in EVENT_FIELDS}
+    out["parts"] = normalize_parts(raw.get("parts"))
     out["group"] = group or raw.get("group") or ""
     out["status"] = (raw.get("status") or "scheduled").lower().strip()
     out["type"] = (raw.get("type") or "event").lower().strip()
@@ -189,12 +208,22 @@ def event_lines(ev, updated=False, with_title=True, deltas=None, brief=False):
             lines.append(f"⏸️ {ev.get('title') or 'Event'} — postponed")
         else:
             lines.append(f"{emoji} {title}")
+    parts = ev.get("parts") or []
     if not cancelled:
-        if ev.get("time"):
-            old_time = (deltas.get("time") or (None, None))[0]
-            lines.append(f"🕒 {old_time} → {ev['time']}" if old_time else f"🕒 {ev['time']}")
-        if ev.get("place"):
-            lines.append(f"📍 {ev['place']}")
+        # With sub-fixtures, a single 🕒/📍 would be one squad's detail presented as the day's —
+        # exactly the confusion the bullets exist to remove. Each part carries its own.
+        if parts:
+            for p in parts:
+                detail = ", ".join(filter(None, (p.get("time"), p.get("place")))) or "TBC"
+                state = (p.get("status") or "").lower()
+                mark = f" — {state.upper()}" if state in ("cancelled", "postponed") else ""
+                lines.append(f"   • {p['label']}: {detail}{mark}")
+        else:
+            if ev.get("time"):
+                old_time = (deltas.get("time") or (None, None))[0]
+                lines.append(f"🕒 {old_time} → {ev['time']}" if old_time else f"🕒 {ev['time']}")
+            if ev.get("place"):
+                lines.append(f"📍 {ev['place']}")
         if ev.get("map_url"):
             lines.append(f"🗺️ {ev['map_url']}")
         if ev.get("bib"):

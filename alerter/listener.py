@@ -67,6 +67,14 @@ You are given the parent's CURRENT KNOWN EVENTS for {who} (the ledger). Use it t
   - judge relevance: set relevant=false for banter, thanks, results, photos with no logistics,
     pure availability chatter (who's in/out), or anything not actionable for a parent.{extra_ignore}
 
+When ONE day has SEVERAL fixtures for different squads/divisions/teams (e.g. "Div 1 2pm
+Ballyboden, Div 7 1:30pm pitch 21, Div 10 11am Dartry Park"), do NOT pick one squad's time and
+venue for the top-level fields and describe the rest in notes. Leave "time" and "place" EMPTY and
+put each fixture in "parts": [{{"label":"Div 1","time":"2:00pm","place":"Ballyboden","status":""}}].
+Use "parts" ONLY for that case — a single fixture keeps its time/place at the top level and an
+empty parts list. Set a part's "status" to "cancelled"/"postponed" when only that one is off, and
+use "" for a time or venue that is genuinely not stated yet.
+
 Set status="cancelled" when the message cancels/calls off the event (keep its date + team so it
 is recorded — "no game" is worth knowing). Use status="postponed" for postponements.
 If the message includes a Google Maps / location link for the venue (e.g. maps.app.goo.gl/…,
@@ -98,7 +106,8 @@ Respond with ONLY this JSON object and nothing else:
     "bib": "<bib/strip colour for {who}, or empty>",
     "team": "<team/squad name, or empty>",
     "notes": "<parent-actionable essentials ONLY, one short clause, max ~90 chars: bring/meet/carpool/cancellation reason. EXCLUDE club admin that is not about getting {who} to THIS event: subs/membership payments, registration portals, requests to react/RSVP in an app or group, fundraising, kit hand-ins, AGMs, volunteer rotas, prices for optional extras. NO date-reasoning meta. Use \"\" if nothing is essential>",
-    "status": "<scheduled|cancelled|postponed>"
+    "status": "<scheduled|cancelled|postponed>",
+    "parts": [{{"label":"<squad/division>","time":"","place":"","status":""}}]
   }}
 }}
 If relevant=false you may leave event fields empty. "iso" is REQUIRED when relevant=true."""

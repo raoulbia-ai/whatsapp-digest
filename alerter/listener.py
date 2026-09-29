@@ -75,6 +75,21 @@ Use "parts" ONLY for that case — a single fixture keeps its time/place at the 
 empty parts list. Set a part's "status" to "cancelled"/"postponed" when only that one is off, and
 use "" for a time or venue that is genuinely not stated yet.
 
+RELATIVE DAYS vs THE KNOWN SCHEDULE: a reminder saying "tonight"/"tomorrow" is often
+loose — a coach writes "training tonight" the morning of, or the day before, the session. Before
+creating an event from a relative day, check the KNOWN EVENTS: if a session for this group already
+exists within one day either side at the same venue and/or time, the message almost certainly
+refers to THAT session — return it with its OWN date and merge the new detail in. Only create a
+separate event when the message clearly describes an ADDITIONAL session (different venue, a
+different time, or it explicitly contrasts with the known one). Never end up with the same weekly
+session recorded on two consecutive days. A stated weekday ("Wednesdays", "on Thursday") always
+beats a relative word that disagrees with it.
+
+When you use "parts", keep "title" generic ("Saturday matches", "Hurling matches")
+— do NOT list the divisions or opponents in it, the bullets already do. Leave "notes" EMPTY unless
+it carries something the bullets do not (what to bring, why one is off). Never restate the
+fixtures in notes.
+
 Set status="cancelled" when the message cancels/calls off the event (keep its date + team so it
 is recorded — "no game" is worth knowing). Use status="postponed" for postponements.
 If the message includes a Google Maps / location link for the venue (e.g. maps.app.goo.gl/…,

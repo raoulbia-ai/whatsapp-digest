@@ -163,6 +163,34 @@ def prune_ledger(events, before_iso):
     return [e for e in events if not e.get("iso") or e.get("iso") >= before_iso]
 
 
+def _squash(s):
+    """Lowercase, alphanumerics only — so "Div 1" and "Div1" compare equal."""
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+
+def _restates_parts(notes, parts):
+    """True if the notes line is mostly a prose rerun of the part bullets.
+
+    The model often fills both — "Div 1: 2pm Ballyboden" as a part AND "Div1 Ballyboden 2pm - ..."
+    as notes — which printed the same fixtures twice under each other. Compare squashed, because
+    the prose spelling ("Div1") rarely matches the label's ("Div 1").
+    """
+    flat = _squash(notes)
+    labelled = sum(1 for p in parts if p.get("label") and _squash(p["label"]) in flat)
+    return labelled >= 2 or (labelled == 1 and len(parts) == 1)
+
+
+def _strip_part_list(title, parts):
+    """Drop a trailing "(Div 1 / Div 7 / Div 10)" that the bullets already spell out."""
+    m = re.search(r"\s*[(\[][^()\[\]]*[)\]]\s*$", title or "")
+    if not m:
+        return title
+    inner = _squash(m.group(0))
+    if sum(1 for p in parts if p.get("label") and _squash(p["label"]) in inner) >= 2:
+        return title[: m.start()].rstrip()
+    return title
+
+
 def _same_team(team, group):
     """True if the team label adds nothing over the group name (one contains the other's words)."""
     a, b = set(re.findall(r"[a-z0-9]+", (team or "").lower())), set(
@@ -189,6 +217,8 @@ def event_lines(ev, updated=False, with_title=True, deltas=None, brief=False):
     lines = []
     emoji = STATUS_EMOJI.get(ev.get("status")) or ev.get("emoji") or "•"
     title = ev.get("title") or ev.get("type", "event").title()
+    if ev.get("parts"):
+        title = _strip_part_list(title, ev["parts"])
     if with_title:
         if cancelled:
             title += " — CANCELLED"
@@ -233,8 +263,11 @@ def event_lines(ev, updated=False, with_title=True, deltas=None, brief=False):
     team = (ev.get("team") or "").strip()
     if team and not brief and not _same_team(team, ev.get("group")):
         lines.append(f"👥 {team}")
-    if ev.get("notes"):
-        lines.append(f"📝 {ev['notes']}")
+    notes = (ev.get("notes") or "").strip()
+    if notes and parts and _restates_parts(notes, parts):
+        notes = ""  # the bullets already say it — don't print the prose version underneath
+    if notes:
+        lines.append(f"📝 {notes}")
     return lines
 
 

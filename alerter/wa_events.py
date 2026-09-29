@@ -35,8 +35,14 @@ PART_FIELDS = ("label", "time", "place", "status")
 # Sport is decided by the CHAT (config.chat_sports), not guessed by the model — each group is a
 # single club code. GAA groups run both codes, so there the message text picks football/hurling.
 # "football" is deliberately not a value: it means soccer in one group and gaelic in another.
-SPORT_EMOJI = {"soccer": "\u26bd", "gaa-football": "\U0001f3d0", "hurling": "\U0001f3d1"}
-SPORT_LABEL = {"soccer": "Soccer", "gaa-football": "GAA football", "hurling": "Hurling"}
+SPORT_EMOJI = {
+    "soccer": "\u26bd", "gaa-football": "\U0001f3d0", "hurling": "\U0001f3d1",
+    "waterpolo": "\U0001f93d", "swimming": "\U0001f3ca",
+}
+SPORT_LABEL = {
+    "soccer": "Soccer", "gaa-football": "GAA football", "hurling": "Hurling",
+    "waterpolo": "Water polo", "swimming": "Swimming",
+}
 
 
 def sport_emoji(sport, fallback=""):

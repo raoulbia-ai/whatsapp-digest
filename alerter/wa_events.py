@@ -23,7 +23,7 @@ MEDIA_CACHE = os.path.expanduser("~/.local/share/wa-alerts/media")
 EVENT_FIELDS = (
     "key", "iso", "date", "type", "sport", "emoji", "title",
     "time", "place", "map_url", "bib", "team", "notes", "status",
-    "parts", "group", "updated_at",
+    "parts", "group", "src", "updated_at",
 )
 
 # One record per group per day (see event_key), so a day carrying several fixtures for different
@@ -115,7 +115,7 @@ def normalize_parts(raw_parts):
     return parts
 
 
-def normalize_event(raw, group="", updated_at="", jid=""):
+def normalize_event(raw, group="", updated_at="", jid="", src=""):
     """Coerce a model-emitted event dict into a ledger record; CODE assigns group + key."""
     out = {k: (raw.get(k) or "") for k in EVENT_FIELDS}
     out["parts"] = normalize_parts(raw.get("parts"))
@@ -127,6 +127,7 @@ def normalize_event(raw, group="", updated_at="", jid=""):
     # an emoji can't relabel a GAA fixture with a soccer ball.
     out["emoji"] = sport_emoji(out["sport"], raw.get("emoji") or "")
     out["updated_at"] = updated_at
+    out["src"] = src or raw.get("src") or ""  # message that produced it, for edit retraction
     out["key"] = event_key(out["iso"], out["group"], jid)
     return out
 
@@ -321,3 +322,18 @@ def run_claude(cmd, timeout, cwd="/tmp"):
     )):
         raise ClaudeCLIError(f"claude CLI not authenticated: {out[:200]}")
     return out
+
+
+def drop_by_source(events, message_id):
+    """Remove events created solely by `message_id` — used when that message is EDITED.
+
+    WhatsApp edits replace the text entirely, so an event derived from the old wording may no
+    longer correspond to anything. Only records whose own source is that message are dropped;
+    an event that has since been confirmed or amended by another message keeps its place.
+    """
+    if not message_id:
+        return events, []
+    dropped = [e for e in events if e.get("src") == message_id]
+    if not dropped:
+        return events, []
+    return [e for e in events if e.get("src") != message_id], dropped

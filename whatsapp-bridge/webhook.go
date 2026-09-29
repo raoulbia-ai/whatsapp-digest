@@ -70,8 +70,9 @@ func sendWebhookPayload(payload WebhookPayload) {
 }
 
 // SendWebhook sends a text-only message to the webhook endpoint.
-func SendWebhook(sender, content, chatJID string, isFromMe bool, quotedMessageId, quotedSender, quotedContent string) {
+func SendWebhook(sender, content, chatJID string, isFromMe bool, quotedMessageId, quotedSender, quotedContent, messageID string) {
 	sendWebhookPayload(WebhookPayload{
+		MessageID:       messageID,
 		Sender:          sender,
 		Content:         content,
 		ChatJID:         chatJID,
@@ -141,3 +142,17 @@ func SendReactionWebhook(sender, chatJID string, isFromMe bool, messageID, react
 
 // In main.go, handleMessage forwards webhooks for messages with text content.
 // It will forward self-sent messages when the env var FORWARD_SELF=true.
+
+// SendWebhookEdit forwards a message whose text was edited after sending, so a
+// consumer that already acted on the original can re-evaluate the correction.
+// EventType "edit" lets consumers tell it apart from a fresh message.
+func SendWebhookEdit(sender, content, chatJID string, isFromMe bool, messageID string) {
+	sendWebhookPayload(WebhookPayload{
+		EventType: "edit",
+		Sender:    sender,
+		Content:   content,
+		ChatJID:   chatJID,
+		IsFromMe:  isFromMe,
+		MessageID: messageID,
+	})
+}

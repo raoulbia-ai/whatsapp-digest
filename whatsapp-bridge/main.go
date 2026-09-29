@@ -673,6 +673,18 @@ func (store *MessageStore) MarkMessageDeleted(messageID, chatJID string, deleted
 	return err
 }
 
+// UpdateMessageContent rewrites a stored message's text after a MESSAGE_EDIT.
+// WhatsApp shows only the edited text, so keeping the original would leave the
+// local archive permanently disagreeing with what everyone in the chat sees —
+// and anything reading the archive (digests, alerts) acting on retracted words.
+func (store *MessageStore) UpdateMessageContent(messageID, chatJID, content string) error {
+	_, err := store.db.Exec(
+		`UPDATE messages SET content = ? WHERE id = ? AND chat_jid = ?`,
+		content, messageID, chatJID,
+	)
+	return err
+}
+
 // Get messages from a chat
 func (store *MessageStore) GetMessages(chatJID string, limit int) ([]Message, error) {
 	rows, err := store.db.Query(
@@ -1012,6 +1024,40 @@ func handleMessageRevoke(messageStore *MessageStore, msg *waProto.Message, chatJ
 	if err := messageStore.MarkMessageDeleted(targetID, chatJID, deletedAt); err != nil {
 		logger.Warnf("Failed to mark message %s in %s as deleted: %v", targetID, chatJID, err)
 	}
+}
+
+// handleMessageEdit applies a "message edited" protocol message to the stored
+// row and re-forwards the corrected text to the webhook, so downstream consumers
+// re-evaluate against what the message now says.
+//
+// Returns true when an edit was handled, so the caller can skip the normal
+// new-message path for the same event.
+func handleMessageEdit(messageStore *MessageStore, msg *waProto.Message, chatJID, sender string, isFromMe bool, logger waLog.Logger) bool {
+	if msg == nil || msg.GetProtocolMessage() == nil {
+		return false
+	}
+	protoMsg := msg.GetProtocolMessage()
+	if protoMsg.GetType() != waProto.ProtocolMessage_MESSAGE_EDIT {
+		return false
+	}
+	key := protoMsg.GetKey()
+	if key == nil || key.GetID() == "" {
+		return false
+	}
+	targetID := key.GetID()
+	newContent := extractTextContent(protoMsg.GetEditedMessage())
+	if newContent == "" {
+		return false
+	}
+	if err := messageStore.UpdateMessageContent(targetID, chatJID, newContent); err != nil {
+		logger.Warnf("Failed to apply edit to message %s in %s: %v", targetID, chatJID, err)
+		return false
+	}
+	logger.Infof("✎ Message %s edited in %s", targetID, chatJID)
+	if !isFromMe || forwardSelfMessages {
+		SendWebhookEdit(sender, newContent, chatJID, isFromMe, targetID)
+	}
+	return true
 }
 
 // resolveRecipientJID parses a phone number or JID string and resolves PN -> LID
@@ -1466,6 +1512,9 @@ func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *ev
 
 	updateChatEphemeralSettingsFromProtocolMessage(messageStore, chatJID, msg.Message, msg.Info.Timestamp.Unix(), logger)
 	handleMessageRevoke(messageStore, msg.Message, chatJID, msg.Info.Timestamp.Unix(), logger)
+	if handleMessageEdit(messageStore, msg.Message, chatJID, sender, msg.Info.IsFromMe, logger) {
+		return
+	}
 
 	// Backfill ephemeral state from any regular message's ContextInfo.
 	// EPHEMERAL_SETTING ProtocolMessages and GroupInfo events only fire on
@@ -1601,7 +1650,7 @@ func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *ev
 				msg.Info.ID, mediaType, inlineMimeType, filename, inlineDownloadPath,
 			)
 		} else {
-			SendWebhook(sender, content, chatJID, msg.Info.IsFromMe, quotedMessageId, quotedSender, quotedContent)
+			SendWebhook(sender, content, chatJID, msg.Info.IsFromMe, quotedMessageId, quotedSender, quotedContent, msg.Info.ID)
 		}
 	}
 

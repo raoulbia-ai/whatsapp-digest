@@ -292,6 +292,7 @@ def process(payload):
     media_path = None
     try:
         cfg = load_config()
+        is_edit = payload.get("eventType") == "edit"
         if payload.get("eventType") == "reaction" or payload.get("isFromMe"):
             return
         chat = payload.get("chatJID", "")
@@ -315,8 +316,17 @@ def process(payload):
         tag = {"image": "img", "document": "doc"}.get(payload.get("mediaType"), "txt")
         # Serialize per kid so concurrent messages upsert the ledger one at a time (and so two
         # near-simultaneous messages about the same event can't both alert as "new").
+        msg_id = (payload.get("messageId") or "").strip()
         with kid_lock(skey):
             ledger = wa_events.load_ledger(skey)
+            if is_edit:
+                # The old wording is gone from WhatsApp; retract what only it said, then
+                # re-extract from the corrected text below.
+                ledger, dropped = wa_events.drop_by_source(ledger, msg_id)
+                for d in dropped:
+                    print(f"[edit:retract] {chat}: {d.get('key')}", flush=True)
+                if dropped:
+                    wa_events.save_ledger(skey, ledger)
             relevant, event = claude_extract(
                 content, payload.get("sender", ""), chat, cfg, media_path, ledger
             )
@@ -325,14 +335,16 @@ def process(payload):
                 return
 
             now_str = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
-            ev = wa_events.normalize_event(event, group=group, updated_at=now_str, jid=chat)
+            ev = wa_events.normalize_event(
+                event, group=group, updated_at=now_str, jid=chat, src=msg_id
+            )
             change, merged, deltas = wa_events.upsert(ledger, ev)
             if change == "unchanged":
                 print(f"[skip:dup] {chat} ({kid}): {merged.get('key')}", flush=True)
                 return
             wa_events.save_ledger(skey, ledger)
 
-            prefix = cfg.get("alert_prefix", "🔔")
+            prefix = "✏️" if is_edit else cfg.get("alert_prefix", "🔔")
             bits = [b for b in (kid, group) if b]
             header = f"{prefix} {' · '.join(bits)}".strip()
             alert = "\n".join(

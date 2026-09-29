@@ -2155,3 +2155,90 @@ func TestExtractQuotedMessageInfo_NoContextInfo(t *testing.T) {
 		})
 	}
 }
+
+// buildEditMessage builds a MESSAGE_EDIT protocol message that rewrites targetID.
+func buildEditMessage(chat, sender types.JID, isFromMe bool, targetID, newText string) *events.Message {
+	return &events.Message{
+		Info: types.MessageInfo{
+			MessageSource: types.MessageSource{
+				Chat:     chat,
+				Sender:   sender,
+				IsFromMe: isFromMe,
+			},
+			ID:        "edit-" + targetID,
+			Timestamp: time.Now(),
+		},
+		Message: &waProto.Message{
+			ProtocolMessage: &waProto.ProtocolMessage{
+				Type: waProto.ProtocolMessage_MESSAGE_EDIT.Enum(),
+				Key: &waCommon.MessageKey{
+					RemoteJID: proto.String(chat.String()),
+					ID:        proto.String(targetID),
+					FromMe:    proto.Bool(false),
+				},
+				EditedMessage: &waProto.Message{
+					Conversation: proto.String(newText),
+				},
+			},
+		},
+	}
+}
+
+// TestHandleMessage_Edit_RewritesStoredContent verifies that editing a message
+// replaces the stored text. Keeping the original would leave the archive — and
+// anything reading it — acting on wording the sender has since retracted.
+func TestHandleMessage_Edit_RewritesStoredContent(t *testing.T) {
+	srv, webhookCh := captureRawWebhook(t)
+	t.Setenv("WEBHOOK_URL", srv.URL)
+
+	client := newTestClient(&mockLIDStore{})
+	ms := newTestMessageStore(t)
+	logger := testLogger()
+	chatJID := phonePN.String()
+
+	original := buildTextMessage(phonePN, phonePN, types.EmptyJID, types.EmptyJID, false,
+		"training tonight is in Coolock Astro at 7")
+	handleMessage(client, ms, original, logger)
+	<-webhookCh // the original message's webhook
+
+	edit := buildEditMessage(phonePN, phonePN, false, original.Info.ID,
+		"training tomorrow is in Coolock Astro at 7")
+	handleMessage(client, ms, edit, logger)
+
+	var content string
+	if err := ms.db.QueryRow(
+		"SELECT content FROM messages WHERE id = ? AND chat_jid = ?",
+		original.Info.ID, chatJID,
+	).Scan(&content); err != nil {
+		t.Fatalf("read content: %v", err)
+	}
+	if content != "training tomorrow is in Coolock Astro at 7" {
+		t.Errorf("content = %q, want the edited text", content)
+	}
+
+	select {
+	case payload := <-webhookCh:
+		if payload["eventType"] != "edit" {
+			t.Errorf("eventType = %v, want edit", payload["eventType"])
+		}
+		if payload["messageId"] != original.Info.ID {
+			t.Errorf("messageId = %v, want %s", payload["messageId"], original.Info.ID)
+		}
+		if payload["content"] != "training tomorrow is in Coolock Astro at 7" {
+			t.Errorf("content = %v, want the edited text", payload["content"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for edit webhook call")
+	}
+
+	// The edit event itself must not land as a second message in the chat.
+	var rows int
+	if err := ms.db.QueryRow(
+		"SELECT COUNT(*) FROM messages WHERE chat_jid = ?", chatJID,
+	).Scan(&rows); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	if rows != 1 {
+		t.Errorf("message rows = %d, want 1 (edit must update, not insert)", rows)
+	}
+}
